@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "nuxt dev",
-    "build": "nuxt build",
-    "preview": "nuxt preview"
+    "dev": "node ./node_modules/nuxt/bin/nuxt.mjs dev",
+    "build": "node ./node_modules/nuxt/bin/nuxt.mjs build",
+    "preview": "node ./node_modules/nuxt/bin/nuxt.mjs preview",
+    "postinstall": "node ./node_modules/nuxt/bin/nuxt.mjs prepare"
   },
   "dependencies": {
     "chart.js": "^4.4.8",
