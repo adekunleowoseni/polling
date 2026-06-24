@@ -38,4 +38,3 @@ export { useLiveDashboard, formatRelativeTime, formatClock, PollingUnitStat, Liv
 export { slugify, buildPollingUnitCode, useOgunGeo } from '../composables/useOgunGeo';
 export { useTheme, initThemeFromStorage, ThemeMode } from '../composables/useTheme';
 export { snapshotUrl, useVideoFeeds, PollingUnit, VideoFeedDashboard, FeedUpdateMessage } from '../composables/useVideoFeeds';
-export { useNuxtDevTools } from '../node_modules/@nuxt/devtools/dist/runtime/use-nuxt-devtools';
