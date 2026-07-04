@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "chart.js": "^4.4.8",
+    "livekit-client": "^2.20.0",
     "nuxt": "^3.15.4",
     "vue-chartjs": "^5.3.2"
   },

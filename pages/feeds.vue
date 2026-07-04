@@ -185,23 +185,14 @@
               class="group overflow-hidden rounded-lg border border-ui-border/40 bg-ui-elevated"
             >
               <div class="relative aspect-video bg-black">
-                <button
-                  type="button"
-                  class="block h-full w-full"
-                  :aria-label="`Open ${unit.name} fullscreen`"
-                  @click="openFullscreen(ward.units, unitIdx)"
-                >
-                  <img
-                    :src="snapshotUrl(apiBase, unit.code, frameVersions[unit.code])"
-                    :alt="`${unit.name} live feed`"
-                    class="h-full w-full object-cover"
-                  />
-                </button>
-                <div class="absolute left-1.5 top-1.5 rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                <LiveFeedPlayer
+                  :code="unit.code"
+                  :api-base="apiBase"
+                  :people-count="unit.people_count"
+                  :start-muted="true"
+                />
+                <div class="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-bold text-white">
                   LIVE
-                </div>
-                <div class="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-right backdrop-blur">
-                  <p class="text-sm font-bold leading-none text-emerald-400">{{ unit.people_count }}</p>
                 </div>
                 <button
                   type="button"
@@ -265,7 +256,7 @@
 <script setup lang="ts">
 import { groupByLga, groupByWard, liveUnitsOnly } from "~/composables/useFeedGroups";
 import { feedSnapImageUrl, useFeedSnaps } from "~/composables/useFeedSnaps";
-import { snapshotUrl, useVideoFeeds, type PollingUnit } from "~/composables/useVideoFeeds";
+import { useVideoFeeds, type PollingUnit } from "~/composables/useVideoFeeds";
 import type { FeedSnap } from "~/composables/useFeedSnaps";
 
 definePageMeta({ layout: "default" });

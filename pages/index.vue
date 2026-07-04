@@ -189,13 +189,14 @@
               <li
                 v-for="unit in liveUnitsSorted.slice(0, 12)"
                 :key="unit.id"
-                class="overflow-hidden rounded-lg border border-ui-border/40 bg-black"
+                class="aspect-video overflow-hidden rounded-lg border border-ui-border/40 bg-black"
+                :title="`${unit.name} · ${unit.people_count} on site`"
               >
-                <img
-                  :src="snapshotUrl(apiBase, unit.code, frameVersions[unit.code])"
-                  :alt="`${unit.name} live feed`"
-                  :title="`${unit.name} · ${unit.people_count} on site`"
-                  class="aspect-video w-full object-cover"
+                <LiveFeedPlayer
+                  :code="unit.code"
+                  :api-base="apiBase"
+                  :people-count="unit.people_count"
+                  :start-muted="true"
                 />
               </li>
             </ul>
@@ -225,7 +226,7 @@
 <script setup lang="ts">
 import { groupByLga, liveUnitsOnly } from "~/composables/useFeedGroups";
 import { formatClock, useLiveDashboard } from "~/composables/useLiveDashboard";
-import { snapshotUrl, useVideoFeeds } from "~/composables/useVideoFeeds";
+import { useVideoFeeds } from "~/composables/useVideoFeeds";
 
 definePageMeta({ layout: "default" });
 
@@ -234,7 +235,6 @@ const {
   loading: feedLoading,
   error: feedError,
   apiBase,
-  frameVersions,
   refresh: refreshFeeds,
 } = useVideoFeeds(3000);
 

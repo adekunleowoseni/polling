@@ -46,12 +46,15 @@
           </svg>
         </button>
 
-        <img
-          :key="`${unit.code}-${frameVersion}`"
-          :src="snapshotUrl(apiBase, unit.code, frameVersion)"
-          :alt="`${unit.name} live feed`"
-          class="max-h-full max-w-full object-contain"
-        />
+        <div class="h-full w-full max-w-6xl">
+          <LiveFeedPlayer
+            :key="unit.code"
+            :code="unit.code"
+            :api-base="apiBase"
+            :people-count="unit.people_count"
+            :start-muted="false"
+          />
+        </div>
 
         <button
           v-if="units.length > 1"
@@ -71,21 +74,21 @@
         v-if="units.length > 1"
         class="shrink-0 border-t border-white/10 bg-slate-950/90 px-4 py-3 text-center text-xs text-slate-400"
       >
-        Feed {{ activeIndex + 1 }} of {{ units.length }}
+        Feed {{ activeIndex + 1 }} of {{ units.length }} · use speaker button to mute/unmute audio
       </footer>
     </div>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { snapshotUrl, type PollingUnit } from "~/composables/useVideoFeeds";
+import type { PollingUnit } from "~/composables/useVideoFeeds";
 
 const props = defineProps<{
   open: boolean;
   units: PollingUnit[];
   startIndex?: number;
   apiBase: string;
-  frameVersions: Record<string, number>;
+  frameVersions?: Record<string, number>;
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -100,12 +103,6 @@ watch(
 );
 
 const unit = computed(() => props.units[activeIndex.value] ?? null);
-
-const frameVersion = computed(() => {
-  const code = unit.value?.code;
-  if (!code) return Date.now();
-  return props.frameVersions[code] ?? Date.now();
-});
 
 function prev() {
   if (activeIndex.value > 0) activeIndex.value -= 1;
