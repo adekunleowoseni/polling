@@ -6,14 +6,14 @@
           <p class="text-xs uppercase tracking-wider text-slate-500">Agent relay — {{ agent?.name }}</p>
           <h1 class="text-lg font-semibold text-white">{{ code }}</h1>
           <p class="mt-1 text-xs text-slate-400">
-            Streams POV frames for live video. Each face is counted once — no duplicates.
+            Realtime WebRTC video + audio. Face counting runs in the background.
           </p>
         </div>
         <span
           class="shrink-0 rounded-full px-2 py-1 text-xs font-semibold"
           :class="streaming ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-300'"
         >
-          {{ streaming ? "STREAMING" : status }}
+          {{ streaming ? "LIVE" : status }}
         </span>
       </div>
 
@@ -41,16 +41,26 @@
         <p v-else-if="tokenValid" class="mt-1.5 text-sm text-emerald-400">Ingest token verified.</p>
       </label>
 
-      <div class="mt-4 flex gap-3">
+      <div class="mt-4 flex flex-wrap gap-3">
         <button
           v-if="!streaming"
           class="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          :disabled="!ingestToken || verifyingToken"
+          :disabled="!ingestToken || verifyingToken || starting"
           @click="startStream"
         >
-          {{ verifyingToken ? "Verifying token…" : "Start relay" }}
+          {{ starting ? "Starting…" : verifyingToken ? "Verifying token…" : "Start live relay" }}
         </button>
         <template v-else>
+          <button
+            type="button"
+            class="rounded-lg border px-4 py-2.5 text-sm font-medium"
+            :class="micMuted
+              ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+              : 'border-sky-500/40 bg-sky-500/10 text-sky-300'"
+            @click="toggleMic"
+          >
+            {{ micMuted ? "Unmute mic" : "Mute mic" }}
+          </button>
           <button
             type="button"
             class="rounded-lg border border-sky-500/40 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50"
@@ -69,15 +79,14 @@
       </div>
 
       <p v-if="snapMessage" class="mt-2 text-xs text-sky-400">{{ snapMessage }}</p>
-
       <p v-if="error" class="mt-3 text-sm text-red-400">{{ error }}</p>
       <p v-if="streaming" class="mt-3 text-xs text-slate-500">
-        Live stream ~{{ fpsLabel }} fps · {{ framesSent }} frames sent
-        <span v-if="lastNewFaces"> · +{{ lastNewFaces }} new face(s) last frame</span>
+        WebRTC live · mic {{ micMuted ? "muted" : "on" }}
+        <span v-if="lastNewFaces"> · +{{ lastNewFaces }} new face(s)</span>
       </p>
     </section>
 
-    <section class="rounded-2xl border border-white/10 bg-slate-900/80 p-5">
+    <section class="mt-4 rounded-2xl border border-white/10 bg-slate-900/80 p-5">
       <h2 class="text-sm font-semibold text-white">Correct unique people count</h2>
       <p class="mt-1 text-xs text-slate-500">
         If the auto-detected count is wrong, set the correct number of unique people on site.
@@ -108,6 +117,15 @@
 </template>
 
 <script setup lang="ts">
+import {
+  Room,
+  RoomEvent,
+  Track,
+  createLocalTracks,
+  type LocalAudioTrack,
+  type LocalVideoTrack,
+} from "livekit-client";
+
 definePageMeta({ layout: "default" });
 
 const route = useRoute();
@@ -121,15 +139,11 @@ const videoEl = ref<HTMLVideoElement | null>(null);
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 
 const streaming = ref(false);
+const starting = ref(false);
 const status = ref("idle");
 const error = ref("");
 const lastCount = ref<number | null>(null);
 const lastNewFaces = ref(0);
-const framesSent = ref(0);
-/** Live video interval (ms). Lower = more realtime, more bandwidth. */
-const frameIntervalMs = 400;
-const fpsLabel = (1000 / frameIntervalMs).toFixed(1);
-let sendingFrame = false;
 const correctedCount = ref(0);
 const savingCount = ref(false);
 const countMessage = ref("");
@@ -138,6 +152,7 @@ const snapMessage = ref("");
 const verifyingToken = ref(false);
 const tokenError = ref("");
 const tokenValid = ref(false);
+const micMuted = ref(false);
 
 const tokenBorderClass = computed(() => {
   if (tokenError.value) return "border-red-500 bg-slate-950";
@@ -145,8 +160,14 @@ const tokenBorderClass = computed(() => {
   return "border-white/10 bg-slate-950";
 });
 
-let mediaStream: MediaStream | null = null;
-let sendTimer: ReturnType<typeof setInterval> | null = null;
+let room: Room | null = null;
+let localVideo: LocalVideoTrack | null = null;
+let localAudio: LocalAudioTrack | null = null;
+let countTimer: ReturnType<typeof setInterval> | null = null;
+let sendingCountFrame = false;
+
+/** Face-count samples only (video/audio is WebRTC). */
+const countIntervalMs = 2000;
 
 onMounted(async () => {
   if (!requireAgent()) return;
@@ -168,7 +189,7 @@ async function loadCurrentCount() {
       correctedCount.value = unit.people_count;
     }
   } catch {
-    // unit list may fail before stream starts
+    // ignore
   }
 }
 
@@ -200,9 +221,9 @@ async function validateIngestToken(): Promise<boolean> {
     tokenValid.value = true;
     return true;
   } catch (err: unknown) {
-    const status = (err as { statusCode?: number })?.statusCode;
+    const statusCode = (err as { statusCode?: number })?.statusCode;
     const detail = (err as { data?: { detail?: string } })?.data?.detail;
-    if (status === 401) {
+    if (statusCode === 401) {
       tokenError.value = "Invalid ingest token. Check the token from when you created this unit.";
     } else if (typeof detail === "string") {
       tokenError.value = detail;
@@ -216,9 +237,9 @@ async function validateIngestToken(): Promise<boolean> {
 }
 
 async function saveCorrectedCount() {
-  savingCount.value = true;
   countMessage.value = "";
   error.value = "";
+  savingCount.value = true;
   try {
     const res = await $fetch<{ people_count: number }>(
       `${apiBase}/polling-units/${code.value}/people-count`,
@@ -229,64 +250,133 @@ async function saveCorrectedCount() {
       },
     );
     lastCount.value = res.people_count;
-    countMessage.value = `Count updated to ${res.people_count} unique people.`;
+    countMessage.value = "Count updated.";
   } catch (err: unknown) {
-    const status = (err as { statusCode?: number })?.statusCode;
     const detail = (err as { data?: { detail?: string } })?.data?.detail;
-    if (status === 404) {
-      error.value = "Update endpoint not found — restart the backend server, then try again.";
-    } else if (typeof detail === "string") {
-      error.value = detail;
-    } else {
-      error.value = "Failed to update count.";
-    }
+    error.value = typeof detail === "string" ? detail : "Failed to update count.";
   } finally {
     savingCount.value = false;
   }
 }
 
+function ingestHeaders() {
+  return {
+    "X-Ingest-Token": ingestToken.value,
+    ...authHeaders(),
+  };
+}
+
 async function startStream() {
   error.value = "";
   tokenError.value = "";
+  starting.value = true;
 
   const ok = await validateIngestToken();
-  if (!ok) return;
+  if (!ok) {
+    starting.value = false;
+    return;
+  }
 
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
-      audio: false,
+    const session = await $fetch<{ url: string; token: string }>(`${apiBase}/webrtc/publisher-token`, {
+      method: "POST",
+      headers: ingestHeaders(),
+      body: { code: code.value },
     });
-    if (videoEl.value) videoEl.value.srcObject = mediaStream;
+
+    const tracks = await createLocalTracks({
+      audio: true,
+      video: {
+        facingMode: "environment",
+        resolution: { width: 1280, height: 720, frameRate: 24 },
+      },
+    });
+
+    localVideo = (tracks.find((t) => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined) ?? null;
+    localAudio = (tracks.find((t) => t.kind === Track.Kind.Audio) as LocalAudioTrack | undefined) ?? null;
+
+    if (localVideo && videoEl.value) {
+      localVideo.attach(videoEl.value);
+    }
+
+    room = new Room();
+    room.on(RoomEvent.Disconnected, () => {
+      if (streaming.value) {
+        error.value = "Live connection lost.";
+        void stopStream();
+      }
+    });
+
+    await room.connect(session.url, session.token);
+    if (localVideo) await room.localParticipant.publishTrack(localVideo);
+    if (localAudio) await room.localParticipant.publishTrack(localAudio);
+
+    await $fetch(`${apiBase}/webrtc/${code.value}/start`, {
+      method: "POST",
+      headers: ingestHeaders(),
+    });
+
     streaming.value = true;
     status.value = "live";
-    await sendFrame();
-    if (tokenError.value || error.value) {
-      stopStream();
-      return;
-    }
-    sendTimer = setInterval(sendFrame, frameIntervalMs);
-  } catch {
-    error.value = "Camera access denied. Allow camera permission to relay video.";
-    stopStream();
+    micMuted.value = false;
+    countTimer = setInterval(sendCountFrame, countIntervalMs);
+    void sendCountFrame();
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    error.value =
+      typeof detail === "string"
+        ? detail
+        : "Could not start WebRTC. Check LiveKit config and camera/mic permissions.";
+    await stopStream();
+  } finally {
+    starting.value = false;
   }
 }
 
-function stopStream() {
+async function toggleMic() {
+  if (!localAudio) return;
+  if (micMuted.value) {
+    await localAudio.unmute();
+    micMuted.value = false;
+  } else {
+    await localAudio.mute();
+    micMuted.value = true;
+  }
+}
+
+async function stopStream() {
   streaming.value = false;
   status.value = "stopped";
-  if (sendTimer) clearInterval(sendTimer);
-  sendTimer = null;
-  mediaStream?.getTracks().forEach((t) => t.stop());
-  mediaStream = null;
+  if (countTimer) clearInterval(countTimer);
+  countTimer = null;
+
+  try {
+    if (ingestToken.value) {
+      await $fetch(`${apiBase}/webrtc/${code.value}/stop`, {
+        method: "POST",
+        headers: ingestHeaders(),
+      });
+    }
+  } catch {
+    // best effort
+  }
+
+  if (room) {
+    room.removeAllListeners();
+    await room.disconnect();
+    room = null;
+  }
+  localVideo?.stop();
+  localAudio?.stop();
+  localVideo = null;
+  localAudio = null;
   if (videoEl.value) videoEl.value.srcObject = null;
 }
 
-function drawLiveFrame(maxWidth = 640): boolean {
+function drawCountFrame(maxWidth = 480): boolean {
   const video = videoEl.value;
   const canvas = canvasEl.value;
   if (!video || !canvas || video.readyState < 2) return false;
-
   const srcW = video.videoWidth || maxWidth;
   const srcH = video.videoHeight || Math.round(maxWidth * 0.75);
   const scale = Math.min(1, maxWidth / srcW);
@@ -298,11 +388,38 @@ function drawLiveFrame(maxWidth = 640): boolean {
   return true;
 }
 
-async function captureFrameBlob(quality = 0.9, maxWidth = 1280): Promise<Blob | null> {
-  if (!drawLiveFrame(maxWidth)) return null;
+async function sendCountFrame() {
+  if (!streaming.value || sendingCountFrame) return;
+  if (!drawCountFrame(480)) return;
   const canvas = canvasEl.value;
-  if (!canvas) return null;
-  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+  if (!canvas) return;
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.5));
+  if (!blob) return;
+
+  const formData = new FormData();
+  formData.append("frame", blob, "frame.jpg");
+  sendingCountFrame = true;
+  try {
+    const res = await $fetch<{ people_count: number; new_faces_this_frame: number }>(
+      `${apiBase}/polling-units/${code.value}/ingest`,
+      {
+        method: "POST",
+        body: formData,
+        headers: ingestHeaders(),
+      },
+    );
+    lastCount.value = res.people_count;
+    lastNewFaces.value = res.new_faces_this_frame;
+  } catch (err: unknown) {
+    const statusCode = (err as { statusCode?: number })?.statusCode;
+    if (statusCode === 401) {
+      tokenError.value = "Invalid ingest token. Relay stopped.";
+      await stopStream();
+    }
+  } finally {
+    sendingCountFrame = false;
+  }
 }
 
 async function snapPicture() {
@@ -316,7 +433,13 @@ async function snapPicture() {
   error.value = "";
 
   try {
-    const blob = await captureFrameBlob(0.9, 1280);
+    if (!drawCountFrame(1280)) {
+      error.value = "Camera frame not ready. Try again in a moment.";
+      return;
+    }
+    const canvas = canvasEl.value;
+    if (!canvas) return;
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
     if (!blob) {
       error.value = "Camera frame not ready. Try again in a moment.";
       return;
@@ -324,7 +447,6 @@ async function snapPicture() {
 
     const formData = new FormData();
     formData.append("photo", blob, "snap.jpg");
-
     await $fetch(`${apiBase}/polling-units/${code.value}/snaps`, {
       method: "POST",
       body: formData,
@@ -339,50 +461,7 @@ async function snapPicture() {
   }
 }
 
-async function sendFrame() {
-  // Drop frames if the previous upload is still in flight (keeps stream realtime).
-  if (sendingFrame || !streaming.value) return;
-  if (!drawLiveFrame(640)) return;
-
-  const canvas = canvasEl.value;
-  if (!canvas) return;
-
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.55));
-  if (!blob) return;
-
-  const formData = new FormData();
-  formData.append("frame", blob, "frame.jpg");
-
-  sendingFrame = true;
-  try {
-    const res = await $fetch<{ people_count: number; new_faces_this_frame: number }>(
-      `${apiBase}/polling-units/${code.value}/ingest`,
-      {
-        method: "POST",
-        body: formData,
-        headers: {
-          "X-Ingest-Token": ingestToken.value,
-          ...authHeaders(),
-        },
-      },
-    );
-    lastCount.value = res.people_count;
-    lastNewFaces.value = res.new_faces_this_frame;
-    framesSent.value += 1;
-    error.value = "";
-  } catch (err: unknown) {
-    const status = (err as { statusCode?: number })?.statusCode;
-    const detail = (err as { data?: { detail?: string } })?.data?.detail;
-    if (status === 401) {
-      tokenError.value = "Invalid ingest token. Relay stopped.";
-      stopStream();
-      return;
-    }
-    error.value = typeof detail === "string" ? detail : "Failed to send frame.";
-  } finally {
-    sendingFrame = false;
-  }
-}
-
-onUnmounted(stopStream);
+onUnmounted(() => {
+  void stopStream();
+});
 </script>
