@@ -33,6 +33,34 @@
 
         <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
           <section class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-4">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">Data claim allowance</h3>
+            <p class="mt-1 text-xs text-ui-muted">
+              Used {{ agent.data_claims_used }} of {{ agent.data_claim_limit }} claim(s).
+              Default is 1; increase to allow more credits.
+            </p>
+            <div class="mt-3 flex flex-wrap items-end gap-3">
+              <label class="min-w-[120px]">
+                <span class="text-[10px] uppercase text-ui-muted">Allowed claims</span>
+                <input
+                  v-model.number="editClaimLimit"
+                  type="number"
+                  min="0"
+                  max="1000"
+                  class="ui-input mt-1 text-sm"
+                />
+              </label>
+              <button
+                type="button"
+                class="rounded-lg bg-sky-600 px-4 py-2 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+                :disabled="savingClaims || editClaimLimit < 0"
+                @click="saveClaimLimit"
+              >
+                {{ savingClaims ? "Saving…" : "Save claims" }}
+              </button>
+            </div>
+          </section>
+
+          <section class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-4">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">LGA / ward assignment</h3>
             <div class="mt-3 flex flex-wrap items-end gap-3">
               <label class="min-w-[140px] flex-1">
@@ -115,6 +143,8 @@ export type AdminAgentDetail = {
   lga: string | null;
   ward: string | null;
   created_at: string;
+  data_claim_limit: number;
+  data_claims_used: number;
   polling_units: {
     id: string;
     name: string;
@@ -144,8 +174,10 @@ const emit = defineEmits<{
 
 const editLga = ref("");
 const editWard = ref("");
+const editClaimLimit = ref(1);
 const wards = ref<string[]>([]);
 const saving = ref(false);
+const savingClaims = ref(false);
 const deleting = ref(false);
 
 watch(
@@ -154,6 +186,7 @@ watch(
     if (!isOpen || !agent) return;
     editLga.value = agent.lga ?? "";
     editWard.value = agent.ward ?? "";
+    editClaimLimit.value = agent.data_claim_limit ?? 1;
     if (editLga.value) {
       wards.value = await $fetch<string[]>(
         `${props.apiBase}/geo/states/ogun/lgas/${encodeURIComponent(editLga.value)}/wards`,
@@ -187,6 +220,21 @@ async function saveAssignment() {
     emit("updated");
   } finally {
     saving.value = false;
+  }
+}
+
+async function saveClaimLimit() {
+  if (!props.agent || editClaimLimit.value < 0) return;
+  savingClaims.value = true;
+  try {
+    await $fetch(`${props.apiBase}/admin/agents/${props.agent.id}/data-claims`, {
+      method: "PATCH",
+      headers: props.authHeaders(),
+      body: { data_claim_limit: editClaimLimit.value },
+    });
+    emit("updated");
+  } finally {
+    savingClaims.value = false;
   }
 }
 
