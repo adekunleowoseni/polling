@@ -236,7 +236,7 @@ const {
   apiBase,
   frameVersions,
   refresh: refreshFeeds,
-} = useVideoFeeds(8000);
+} = useVideoFeeds(3000);
 
 const { data: formData, loading: formLoading } = useLiveDashboard(30000);
 

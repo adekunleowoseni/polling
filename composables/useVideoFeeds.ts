@@ -35,7 +35,7 @@ export function snapshotUrl(apiBase: string, code: string, cacheBust?: number): 
   return `${apiBase}/polling-units/${code}/snapshot?t=${t}`;
 }
 
-export function useVideoFeeds(intervalMs = 5000) {
+export function useVideoFeeds(intervalMs = 3000) {
   const config = useRuntimeConfig();
   const apiBase = config.public.apiBase;
   const wsBase = apiBase.replace(/^https/, "wss").replace(/^http/, "ws");
