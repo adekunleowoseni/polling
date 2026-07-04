@@ -38,10 +38,10 @@
         <div
           v-for="stat in summaryStats"
           :key="stat.label"
-          class="rounded-2xl border border-white/10 bg-slate-900/80 p-5"
+          class="ui-card p-5"
         >
-          <p class="text-xs uppercase tracking-wider text-slate-500">{{ stat.label }}</p>
-          <p class="mt-2 text-3xl font-bold text-white">{{ stat.value }}</p>
+          <p class="text-xs uppercase tracking-wider text-ui-muted">{{ stat.label }}</p>
+          <p class="mt-2 text-3xl font-bold text-ui-text">{{ stat.value }}</p>
         </div>
       </section>
 

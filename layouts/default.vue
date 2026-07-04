@@ -12,19 +12,56 @@
 
         <div class="flex flex-wrap items-center gap-2">
           <nav class="flex flex-wrap items-center gap-1 text-sm">
-            <NuxtLink to="/" class="ui-nav-link" active-class="ui-nav-link-active">
-              Dashboard
+            <NuxtLink
+              to="/"
+              class="ui-nav-link"
+              :class="{ 'ui-nav-link-active': route.path === '/' }"
+            >
+              Home
             </NuxtLink>
-            <NuxtLink to="/feeds" class="ui-nav-link" active-class="ui-nav-link-active">
+            <NuxtLink
+              to="/monitor"
+              class="ui-nav-link"
+              active-class="ui-nav-link-active"
+            >
+              Monitor
+            </NuxtLink>
+            <NuxtLink
+              to="/feeds"
+              class="ui-nav-link"
+              active-class="ui-nav-link-active"
+            >
               Live Feeds
             </NuxtLink>
-            <NuxtLink to="/scan" class="ui-nav-link" active-class="ui-nav-link-active">
+            <NuxtLink
+              to="/scan"
+              class="ui-nav-link"
+              active-class="ui-nav-link-active"
+            >
               Scan Form
             </NuxtLink>
-            <NuxtLink to="/agent/login" class="ui-nav-link" active-class="ui-nav-link-active">
+            <NuxtLink
+              v-if="dashboardHref"
+              :to="dashboardHref"
+              class="ui-nav-link"
+              active-class="ui-nav-link-active"
+            >
+              Dashboard
+            </NuxtLink>
+            <NuxtLink
+              v-if="!isAgentLoggedIn"
+              to="/agent/login"
+              class="ui-nav-link"
+              active-class="ui-nav-link-active"
+            >
               Agent
             </NuxtLink>
-            <NuxtLink to="/admin/login" class="ui-nav-link" active-class="ui-nav-link-active">
+            <NuxtLink
+              v-if="!isAdminLoggedIn"
+              to="/admin/login"
+              class="ui-nav-link"
+              active-class="ui-nav-link-active"
+            >
               Admin
             </NuxtLink>
           </nav>
@@ -47,3 +84,15 @@
     </footer>
   </div>
 </template>
+
+<script setup lang="ts">
+const route = useRoute();
+const { isLoggedIn: isAgentLoggedIn } = useAgentAuth();
+const { isLoggedIn: isAdminLoggedIn } = useAdminAuth();
+
+const dashboardHref = computed(() => {
+  if (isAdminLoggedIn.value) return "/admin/dashboard";
+  if (isAgentLoggedIn.value) return "/agent/dashboard";
+  return null;
+});
+</script>

@@ -2,221 +2,142 @@
   <div>
     <section class="relative overflow-hidden border-b border-ui-border/50">
       <div class="absolute inset-0 bg-gradient-to-b from-sky-100/70 via-ui-bg to-ui-bg dark:from-sky-900/30 dark:via-ui-bg dark:to-ui-bg" />
-      <div class="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
-        <div class="flex flex-wrap items-start justify-between gap-6">
-          <div>
-            <BrandLogos size="lg" class="mb-5" />
-            <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-700 dark:text-red-300">
-              <span class="relative flex h-2 w-2">
-                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-                <span class="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-              </span>
-              Live feed monitor — auto-refreshing
-            </div>
-            <h1 class="text-3xl font-bold tracking-tight text-ui-text sm:text-4xl">
-              Ogun State Live Monitor
-            </h1>
-            <p class="mt-3 max-w-2xl text-ui-muted">
-              Real-time view of active polling unit video feeds, unique people on site, and ward activity
-              across Ogun State.
-            </p>
-          </div>
-          <div class="flex flex-col items-end gap-2 text-right text-sm text-ui-muted">
-            <button
-              class="rounded-lg border border-ui-border/60 px-3 py-1.5 text-xs text-ui-text transition hover:bg-ui-muted/10"
-              :disabled="feedLoading"
-              @click="refreshFeeds"
-            >
-              {{ feedLoading ? "Refreshing…" : "Refresh now" }}
-            </button>
-            <p v-if="feedData?.updated_at">
-              Last sync: {{ formatClock(feedData.updated_at) }}
-            </p>
-          </div>
+      <div class="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-20">
+        <BrandLogos size="lg" class="mb-6" />
+        <h1 class="max-w-3xl text-3xl font-bold tracking-tight text-ui-text sm:text-5xl">
+          Ogun State Election Live Monitor
+        </h1>
+        <p class="mt-5 max-w-2xl text-lg text-ui-muted">
+          A real-time command centre for polling day — field agents stream live video from polling units,
+          unique people are counted on site, and coordinators watch ward activity across every LGA in Ogun State.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <NuxtLink
+            to="/monitor"
+            class="inline-flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-500"
+          >
+            <span class="relative flex h-2 w-2">
+              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+              <span class="relative inline-flex h-2 w-2 rounded-full bg-white" />
+            </span>
+            Open live monitor
+          </NuxtLink>
+          <NuxtLink
+            to="/agent/login"
+            class="rounded-lg border border-ui-border/60 px-5 py-2.5 text-sm font-medium text-ui-text transition hover:bg-ui-muted/10"
+          >
+            Agent sign in
+          </NuxtLink>
         </div>
       </div>
     </section>
 
-    <div class="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6">
-      <p v-if="feedError" class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-500 dark:text-red-300">
-        {{ feedError }}
-      </p>
-
-      <!-- Live feed stats -->
-      <section class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div
-          v-for="stat in liveStats"
-          :key="stat.label"
-          class="ui-card p-5 shadow-lg"
-        >
-          <p class="text-xs font-medium uppercase tracking-wider text-ui-muted">{{ stat.label }}</p>
-          <p class="mt-2 text-3xl font-bold" :class="stat.accent ?? 'text-ui-text'">
-            <span v-if="!feedLoading || feedData">{{ stat.value }}</span>
-            <span v-else class="inline-block h-8 w-16 animate-pulse rounded bg-ui-elevated" />
-          </p>
-          <p class="mt-1 text-xs text-ui-muted">{{ stat.hint }}</p>
+    <div class="mx-auto max-w-7xl space-y-12 px-4 py-10 sm:px-6 sm:py-14">
+      <!-- Platform stats -->
+      <section>
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-ui-muted">Platform at a glance</h2>
+        <div class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div
+            v-for="stat in platformStats"
+            :key="stat.label"
+            class="ui-card p-5"
+          >
+            <p class="text-xs font-medium uppercase tracking-wider text-ui-muted">{{ stat.label }}</p>
+            <p class="mt-2 text-3xl font-bold" :class="stat.accent ?? 'text-ui-text'">
+              <span v-if="!statsLoading">{{ stat.value }}</span>
+              <span v-else class="inline-block h-8 w-14 animate-pulse rounded bg-ui-elevated" />
+            </p>
+            <p class="mt-1 text-xs text-ui-muted">{{ stat.hint }}</p>
+          </div>
         </div>
       </section>
 
-      <!-- Form scan stat (secondary) -->
-      <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="ui-card border-emerald-500/20 p-5 sm:col-span-1">
-          <p class="text-xs font-medium uppercase tracking-wider text-ui-muted">Forms scanned</p>
-          <p class="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-            <span v-if="!formLoading || formData">{{ formData?.total_registrations ?? 0 }}</span>
-            <span v-else class="inline-block h-7 w-14 animate-pulse rounded bg-ui-elevated" />
+      <!-- What it does -->
+      <section>
+        <h2 class="text-2xl font-bold text-ui-text">What this platform does</h2>
+        <p class="mt-2 max-w-2xl text-ui-muted">
+          Built for election-day transparency — connecting field agents, coordinators, and the public
+          to live polling unit activity across Ogun State.
+        </p>
+        <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <article
+            v-for="feature in features"
+            :key="feature.title"
+            class="ui-card p-6"
+          >
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl text-xl" :class="feature.iconBg">
+              {{ feature.icon }}
+            </div>
+            <h3 class="mt-4 font-semibold text-ui-text">{{ feature.title }}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-ui-muted">{{ feature.description }}</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-6 py-5">
+          <h2 class="text-lg font-semibold text-ui-text">How it works</h2>
+        </div>
+        <ol class="divide-y divide-ui-border/30">
+          <li
+            v-for="(step, idx) in steps"
+            :key="step.title"
+            class="flex gap-4 px-6 py-5"
+          >
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sm font-bold text-sky-600 dark:text-sky-400">
+              {{ idx + 1 }}
+            </span>
+            <div>
+              <h3 class="font-medium text-ui-text">{{ step.title }}</h3>
+              <p class="mt-1 text-sm text-ui-muted">{{ step.description }}</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- Coverage -->
+      <section class="grid gap-6 lg:grid-cols-2">
+        <div class="ui-card p-6">
+          <h2 class="text-lg font-semibold text-ui-text">Statewide coverage</h2>
+          <p class="mt-2 text-sm text-ui-muted">
+            Agents are assigned to LGAs and wards across Ogun State. Polling units are selected from
+            the official INEC catalog — no manual typing, fewer errors on election day.
           </p>
-          <p class="mt-1 text-xs text-ui-muted">
-            {{ formData?.today_count ?? 0 }} today ·
-            <NuxtLink to="/scan" class="text-emerald-600 hover:underline dark:text-emerald-400">Scan form</NuxtLink>
-          </p>
+          <dl class="mt-5 grid grid-cols-2 gap-4">
+            <div class="rounded-lg bg-ui-elevated/50 px-4 py-3">
+              <dt class="text-xs uppercase tracking-wider text-ui-muted">Local gov. areas</dt>
+              <dd class="mt-1 text-2xl font-bold text-ui-text">{{ geoSummary?.lga_count ?? "—" }}</dd>
+            </div>
+            <div class="rounded-lg bg-ui-elevated/50 px-4 py-3">
+              <dt class="text-xs uppercase tracking-wider text-ui-muted">Electoral wards</dt>
+              <dd class="mt-1 text-2xl font-bold text-ui-text">{{ geoSummary?.ward_count ?? "—" }}</dd>
+            </div>
+          </dl>
         </div>
 
-        <div class="ui-card flex flex-wrap items-center justify-between gap-4 p-5 sm:col-span-1 lg:col-span-3">
+        <div class="ui-card flex flex-col justify-between p-6">
           <div>
-            <h2 class="text-sm font-semibold text-ui-text">Open live feeds</h2>
-            <p class="mt-1 text-xs text-ui-muted">Watch active ward streams grouped by LGA.</p>
+            <h2 class="text-lg font-semibold text-ui-text">Ready to watch live?</h2>
+            <p class="mt-2 text-sm text-ui-muted">
+              The monitor dashboard refreshes every few seconds with live feed counts, active wards,
+              people on site, and video previews from the field.
+            </p>
           </div>
-          <div class="flex gap-3">
+          <div class="mt-6 flex flex-wrap gap-3">
+            <NuxtLink
+              to="/monitor"
+              class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
+            >
+              Go to monitor
+            </NuxtLink>
             <NuxtLink
               to="/feeds"
-              class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500"
+              class="rounded-lg border border-ui-border/50 px-4 py-2 text-sm text-ui-text hover:bg-ui-muted/10"
             >
-              View live feeds
-            </NuxtLink>
-            <NuxtLink
-              to="/agent/login"
-              class="rounded-lg border border-ui-border/60 px-4 py-2 text-sm text-ui-text transition hover:bg-ui-muted/10"
-            >
-              Agent sign in
+              Browse live feeds
             </NuxtLink>
           </div>
-        </div>
-      </section>
-
-      <div class="grid gap-8 lg:grid-cols-5">
-        <!-- Live streaming units -->
-        <section class="lg:col-span-3">
-          <div class="ui-card shadow-lg">
-            <div class="flex items-center justify-between border-b border-ui-border/40 px-5 py-4">
-              <h2 class="text-lg font-semibold text-ui-text">Live streaming units</h2>
-              <span class="text-xs text-ui-muted">{{ liveUnits.length }} live now</span>
-            </div>
-
-            <div v-if="feedLoading && !feedData" class="p-8 text-center text-sm text-ui-muted">
-              Loading live feeds…
-            </div>
-
-            <div v-else-if="!liveUnits.length" class="p-10 text-center">
-              <p class="text-ui-muted">No live video feeds right now.</p>
-              <p class="mt-2 text-sm text-ui-muted">
-                Feeds appear when agents start streaming from
-                <NuxtLink to="/agent/login" class="text-sky-600 hover:underline dark:text-sky-400">registered units</NuxtLink>.
-              </p>
-            </div>
-
-            <div v-else class="overflow-x-auto">
-              <table class="w-full text-left text-sm">
-                <thead>
-                  <tr class="border-b border-ui-border/30 text-xs uppercase tracking-wider text-ui-muted">
-                    <th class="px-5 py-3 font-medium">Polling unit</th>
-                    <th class="px-5 py-3 font-medium">Ward</th>
-                    <th class="px-5 py-3 font-medium">LGA</th>
-                    <th class="px-5 py-3 font-medium text-right">On site</th>
-                    <th class="px-5 py-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-ui-border/30">
-                  <tr
-                    v-for="unit in liveUnitsSorted"
-                    :key="unit.id"
-                    class="transition hover:bg-ui-muted/5"
-                  >
-                    <td class="px-5 py-3.5">
-                      <div class="min-w-0">
-                        <p class="truncate font-medium text-ui-text">{{ unit.name }}</p>
-                        <p class="truncate text-xs text-ui-muted">{{ unit.code }}</p>
-                        <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-ui-elevated">
-                          <div
-                            class="h-full rounded-full bg-sky-500 transition-all duration-500"
-                            :style="{ width: `${peopleBarWidth(unit.people_count)}%` }"
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td class="px-5 py-3.5 text-ui-muted">{{ unit.ward }}</td>
-                    <td class="px-5 py-3.5">
-                      <NuxtLink
-                        :to="{ path: '/feeds', query: { lga: unit.lga } }"
-                        class="text-sky-600 hover:underline dark:text-sky-400"
-                      >
-                        {{ unit.lga }}
-                      </NuxtLink>
-                    </td>
-                    <td class="px-5 py-3.5 text-right font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                      {{ unit.people_count }}
-                    </td>
-                    <td class="px-5 py-3.5">
-                      <span class="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400">
-                        <span class="h-1.5 w-1.5 rounded-full bg-red-500" />
-                        LIVE
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- Live now previews -->
-        <section class="lg:col-span-2">
-          <div class="ui-card shadow-lg">
-            <div class="border-b border-ui-border/40 px-5 py-4">
-              <h2 class="text-lg font-semibold text-ui-text">Live now</h2>
-              <p class="text-xs text-ui-muted">Active feed previews</p>
-            </div>
-
-            <div v-if="feedLoading && !feedData" class="p-8 text-center text-sm text-ui-muted">
-              Loading…
-            </div>
-
-            <ul v-else-if="!liveUnits.length" class="p-8 text-center text-sm text-ui-muted">
-              Waiting for agents to go live…
-            </ul>
-
-            <ul v-else class="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3">
-              <li
-                v-for="unit in liveUnitsSorted.slice(0, 12)"
-                :key="unit.id"
-                class="aspect-video overflow-hidden rounded-lg border border-ui-border/40 bg-black"
-                :title="`${unit.name} · ${unit.people_count} on site`"
-              >
-                <LiveFeedPlayer
-                  :code="unit.code"
-                  :api-base="apiBase"
-                  :people-count="unit.people_count"
-                  :start-muted="true"
-                />
-              </li>
-            </ul>
-          </div>
-        </section>
-      </div>
-
-      <!-- Live LGAs quick links -->
-      <section v-if="lgaSummaries.length" class="ui-card bg-ui-surface/50 p-5">
-        <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">Live LGAs</h3>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <NuxtLink
-            v-for="lga in lgaSummaries"
-            :key="lga.lga"
-            :to="{ path: '/feeds', query: { lga: lga.lga } }"
-            class="rounded-full border border-ui-border/50 bg-ui-elevated/80 px-3 py-1 text-xs text-ui-muted transition hover:border-sky-500/40 hover:text-sky-600 dark:hover:text-sky-400"
-          >
-            {{ lga.lga }}
-            <span class="ml-1 text-red-500">{{ lga.liveUnits }}</span>
-          </NuxtLink>
         </div>
       </section>
     </div>
@@ -224,63 +145,119 @@
 </template>
 
 <script setup lang="ts">
-import { groupByLga, liveUnitsOnly } from "~/composables/useFeedGroups";
-import { formatClock, useLiveDashboard } from "~/composables/useLiveDashboard";
+import { useLiveDashboard } from "~/composables/useLiveDashboard";
 import { useVideoFeeds } from "~/composables/useVideoFeeds";
 
 definePageMeta({ layout: "default" });
 
-const {
-  data: feedData,
-  loading: feedLoading,
-  error: feedError,
-  apiBase,
-  refresh: refreshFeeds,
-} = useVideoFeeds(3000);
+const config = useRuntimeConfig();
+const apiBase = config.public.apiBase;
 
+const { data: feedData, loading: feedLoading } = useVideoFeeds(30000);
 const { data: formData, loading: formLoading } = useLiveDashboard(30000);
 
-const liveUnits = computed(() => liveUnitsOnly(feedData.value?.units ?? []));
-const lgaSummaries = computed(() => groupByLga(feedData.value?.units ?? []));
+const geoSummary = ref<{ lga_count: number; ward_count: number } | null>(null);
+const geoLoading = ref(true);
 
-const liveUnitsSorted = computed(() =>
-  [...liveUnits.value].sort((a, b) => b.people_count - a.people_count),
-);
+onMounted(async () => {
+  try {
+    geoSummary.value = await $fetch(`${apiBase}/geo/states/ogun/summary`);
+  } catch {
+    geoSummary.value = null;
+  } finally {
+    geoLoading.value = false;
+  }
+});
 
-const maxPeople = computed(() =>
-  Math.max(1, ...liveUnits.value.map((u) => u.people_count)),
-);
+const statsLoading = computed(() => feedLoading.value || formLoading.value || geoLoading.value);
 
-const activeWards = computed(
-  () => new Set(liveUnits.value.map((u) => `${u.lga}|${u.ward}`)).size,
-);
-
-const liveStats = computed(() => [
+const platformStats = computed(() => [
+  {
+    label: "Registered units",
+    value: feedData.value?.registered_units ?? 0,
+    hint: "Polling units in the system",
+    accent: "text-ui-text",
+  },
   {
     label: "Live feeds",
     value: feedData.value?.live_feeds ?? 0,
-    hint: "Polling units streaming now",
+    hint: "Streaming right now",
     accent: "text-red-600 dark:text-red-400",
   },
   {
-    label: "People on site",
-    value: feedData.value?.total_people ?? 0,
-    hint: "Unique people across live feeds",
+    label: "Forms scanned",
+    value: formData.value?.total_registrations ?? 0,
+    hint: `${formData.value?.today_count ?? 0} today`,
     accent: "text-emerald-600 dark:text-emerald-400",
   },
   {
-    label: "Live LGAs",
-    value: lgaSummaries.value.length,
-    hint: "Local governments with active streams",
-  },
-  {
-    label: "Active wards",
-    value: activeWards.value,
-    hint: "Wards with at least one live feed",
+    label: "LGAs in Ogun",
+    value: geoSummary.value?.lga_count ?? "—",
+    hint: `${geoSummary.value?.ward_count ?? "—"} electoral wards`,
+    accent: "text-sky-600 dark:text-sky-400",
   },
 ]);
 
-function peopleBarWidth(count: number): number {
-  return Math.round((count / maxPeople.value) * 100);
-}
+const features = [
+  {
+    icon: "📡",
+    iconBg: "bg-red-500/10",
+    title: "Live video streaming",
+    description:
+      "Field agents broadcast real-time video and audio from polling units via WebRTC. Coordinators and the public can watch live feeds grouped by LGA and ward.",
+  },
+  {
+    icon: "👥",
+    iconBg: "bg-emerald-500/10",
+    title: "Unique people counting",
+    description:
+      "Computer vision detects and deduplicates faces in the stream to estimate how many unique individuals are on site at each polling unit.",
+  },
+  {
+    icon: "📋",
+    iconBg: "bg-violet-500/10",
+    title: "Form registration scanning",
+    description:
+      "Scan voter registration forms to log participation. Registrations are tracked in the live dashboard alongside streaming activity.",
+  },
+  {
+    icon: "📍",
+    iconBg: "bg-sky-500/10",
+    title: "Official polling unit catalog",
+    description:
+      "Agents select LGA, ward, and polling unit from the INEC list. No free-text entry — every unit is mapped to the correct electoral geography.",
+  },
+  {
+    icon: "📱",
+    iconBg: "bg-amber-500/10",
+    title: "Agent data credits",
+    description:
+      "Admins can allocate mobile data plans so field agents stay connected on polling day. Claim limits are controlled per agent.",
+  },
+  {
+    icon: "🛡️",
+    iconBg: "bg-ui-elevated",
+    title: "Admin control panel",
+    description:
+      "Super admins manage agents, force streams offline, correct counts, review saved pictures, and configure enabled data plans.",
+  },
+];
+
+const steps = [
+  {
+    title: "Agents register and go live",
+    description:
+      "Field agents sign in, register their polling unit, and start a live stream from the relay page using their ingest token.",
+  },
+  {
+    title: "Video feeds appear on the monitor",
+    description:
+      "The monitor dashboard shows live feed counts, active LGAs and wards, people on site, and video previews — all auto-refreshing.",
+  },
+  {
+    title: "Coordinators drill down by LGA",
+    description:
+      "Open Live Feeds to browse streams by local government and ward, view fullscreen, and review saved pictures from the field.",
+  },
+];
 </script>
