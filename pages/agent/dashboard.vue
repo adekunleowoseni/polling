@@ -277,7 +277,7 @@
                 }}
               </option>
               <option v-for="pu in pollingUnits" :key="pu.code" :value="pu.code">
-                {{ pu.code }} — {{ pu.name }}
+                {{ pu.name }}
               </option>
             </select>
           </label>
