@@ -272,7 +272,7 @@ definePageMeta({ layout: "default" });
 
 const route = useRoute();
 const router = useRouter();
-const { data, loading, error, apiBase, frameVersions } = useVideoFeeds(5000);
+const { data, loading, error, apiBase, frameVersions } = useVideoFeeds(3000);
 
 const selectedLga = computed(() => {
   const q = route.query.lga;

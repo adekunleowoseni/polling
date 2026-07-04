@@ -72,7 +72,7 @@
 
       <p v-if="error" class="mt-3 text-sm text-red-400">{{ error }}</p>
       <p v-if="streaming" class="mt-3 text-xs text-slate-500">
-        Sending frames every {{ intervalSec }}s · {{ framesSent }} sent
+        Live stream ~{{ fpsLabel }} fps · {{ framesSent }} frames sent
         <span v-if="lastNewFaces"> · +{{ lastNewFaces }} new face(s) last frame</span>
       </p>
     </section>
@@ -126,7 +126,10 @@ const error = ref("");
 const lastCount = ref<number | null>(null);
 const lastNewFaces = ref(0);
 const framesSent = ref(0);
-const intervalSec = 2;
+/** Live video interval (ms). Lower = more realtime, more bandwidth. */
+const frameIntervalMs = 400;
+const fpsLabel = (1000 / frameIntervalMs).toFixed(1);
+let sendingFrame = false;
 const correctedCount = ref(0);
 const savingCount = ref(false);
 const countMessage = ref("");
@@ -251,7 +254,7 @@ async function startStream() {
 
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
       audio: false,
     });
     if (videoEl.value) videoEl.value.srcObject = mediaStream;
@@ -262,7 +265,7 @@ async function startStream() {
       stopStream();
       return;
     }
-    sendTimer = setInterval(sendFrame, intervalSec * 1000);
+    sendTimer = setInterval(sendFrame, frameIntervalMs);
   } catch {
     error.value = "Camera access denied. Allow camera permission to relay video.";
     stopStream();
@@ -279,17 +282,27 @@ function stopStream() {
   if (videoEl.value) videoEl.value.srcObject = null;
 }
 
-async function captureFrameBlob(): Promise<Blob | null> {
+function drawLiveFrame(maxWidth = 640): boolean {
   const video = videoEl.value;
   const canvas = canvasEl.value;
-  if (!video || !canvas || video.readyState < 2) return null;
+  if (!video || !canvas || video.readyState < 2) return false;
 
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  const srcW = video.videoWidth || maxWidth;
+  const srcH = video.videoHeight || Math.round(maxWidth * 0.75);
+  const scale = Math.min(1, maxWidth / srcW);
+  canvas.width = Math.max(1, Math.round(srcW * scale));
+  canvas.height = Math.max(1, Math.round(srcH * scale));
   const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.drawImage(video, 0, 0);
-  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+  if (!ctx) return false;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return true;
+}
+
+async function captureFrameBlob(quality = 0.9, maxWidth = 1280): Promise<Blob | null> {
+  if (!drawLiveFrame(maxWidth)) return null;
+  const canvas = canvasEl.value;
+  if (!canvas) return null;
+  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
 }
 
 async function snapPicture() {
@@ -303,7 +316,7 @@ async function snapPicture() {
   error.value = "";
 
   try {
-    const blob = await captureFrameBlob();
+    const blob = await captureFrameBlob(0.9, 1280);
     if (!blob) {
       error.value = "Camera frame not ready. Try again in a moment.";
       return;
@@ -327,22 +340,20 @@ async function snapPicture() {
 }
 
 async function sendFrame() {
-  const video = videoEl.value;
+  // Drop frames if the previous upload is still in flight (keeps stream realtime).
+  if (sendingFrame || !streaming.value) return;
+  if (!drawLiveFrame(640)) return;
+
   const canvas = canvasEl.value;
-  if (!video || !canvas || video.readyState < 2) return;
+  if (!canvas) return;
 
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  ctx.drawImage(video, 0, 0);
-
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.55));
   if (!blob) return;
 
   const formData = new FormData();
   formData.append("frame", blob, "frame.jpg");
 
+  sendingFrame = true;
   try {
     const res = await $fetch<{ people_count: number; new_faces_this_frame: number }>(
       `${apiBase}/polling-units/${code.value}/ingest`,
@@ -368,6 +379,8 @@ async function sendFrame() {
       return;
     }
     error.value = typeof detail === "string" ? detail : "Failed to send frame.";
+  } finally {
+    sendingFrame = false;
   }
 }
 
