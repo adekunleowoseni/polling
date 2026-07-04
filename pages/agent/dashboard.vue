@@ -21,26 +21,23 @@
       <h2 class="font-semibold text-ui-text">Register polling unit</h2>
       <p class="mt-1 text-xs text-ui-muted">
         <template v-if="agent?.lga && agent?.ward">
-          Register polling units in your assigned area: {{ agent.ward }}, {{ agent.lga }}.
+          Select a polling unit in your assigned area: {{ agent.ward }}, {{ agent.lga }}.
         </template>
         <template v-else>
-          Select state, LGA, and ward — then enter your polling unit name only.
+          Select LGA, ward, then polling unit — no typing required.
         </template>
       </p>
 
       <form class="mt-4 space-y-4" @submit.prevent="createUnit">
         <label class="block">
-          <span class="text-xs text-slate-500">State</span>
-          <select
-            v-model="form.state"
-            class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
-          >
+          <span class="text-xs text-ui-muted">State</span>
+          <select v-model="form.state" class="ui-input mt-1" disabled>
             <option value="Ogun State">Ogun State</option>
           </select>
         </label>
 
         <label class="block">
-          <span class="text-xs text-slate-500">Local Government Area (LGA)</span>
+          <span class="text-xs text-ui-muted">Local Government Area (LGA)</span>
           <select
             v-model="form.lga"
             required
@@ -54,12 +51,13 @@
         </label>
 
         <label class="block">
-          <span class="text-xs text-slate-500">Ward</span>
+          <span class="text-xs text-ui-muted">Ward</span>
           <select
             v-model="form.ward"
             required
             class="ui-input mt-1"
             :disabled="!form.lga || loadingWards || !wards.length || locationLocked"
+            @change="onWardChange"
           >
             <option value="" disabled>
               {{ !form.lga ? "Select LGA first" : loadingWards ? "Loading wards…" : "Select ward" }}
@@ -69,25 +67,35 @@
         </label>
 
         <label class="block">
-          <span class="text-xs text-slate-500">Polling unit name</span>
-          <input
-            v-model="form.name"
+          <span class="text-xs text-ui-muted">Polling unit</span>
+          <select
+            v-model="form.pu_code"
             required
-            placeholder="e.g. PU 012 - St. Peter's School"
-            class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
-          />
+            class="ui-input mt-1"
+            :disabled="!form.ward || loadingPollingUnits || !pollingUnits.length"
+          >
+            <option value="" disabled>
+              {{
+                !form.ward
+                  ? "Select ward first"
+                  : loadingPollingUnits
+                    ? "Loading polling units…"
+                    : "Select polling unit"
+              }}
+            </option>
+            <option v-for="pu in pollingUnits" :key="pu.code" :value="pu.code">
+              {{ pu.code }} — {{ pu.name }}
+            </option>
+          </select>
         </label>
 
-        <p v-if="previewCode" class="text-xs text-slate-500">
-          Unit code: <span class="font-mono text-slate-400">{{ previewCode }}</span>
+        <p v-if="previewCode" class="text-xs text-ui-muted">
+          Unit code: <span class="font-mono text-ui-text">{{ previewCode }}</span>
         </p>
 
         <label class="block">
-          <span class="text-xs text-slate-500">Device</span>
-          <select
-            v-model="form.device_type"
-            class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
-          >
+          <span class="text-xs text-ui-muted">Device</span>
+          <select v-model="form.device_type" class="ui-input mt-1">
             <option value="meta_rayban">Meta Ray-Ban AI Glasses</option>
             <option value="phone_camera">Phone camera (testing)</option>
           </select>
@@ -96,9 +104,9 @@
         <button
           type="submit"
           class="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
-          :disabled="creating || !form.lga || !form.ward || !form.name"
+          :disabled="creating || !form.lga || !form.ward || !form.pu_code"
         >
-          {{ creating ? "Creating…" : "Create polling unit" }}
+          {{ creating ? "Creating…" : "Register polling unit" }}
         </button>
         <p v-if="createError" class="text-sm text-red-400">{{ createError }}</p>
       </form>
@@ -186,7 +194,17 @@ definePageMeta({ layout: "default" });
 const config = useRuntimeConfig();
 const apiBase = config.public.apiBase;
 const { agent, authHeaders, requireAgent, clear, fetchMe } = useAgentAuth();
-const { lgas, wards, loadingLgas, loadingWards, loadLgas, loadWards } = useOgunGeo();
+const {
+  lgas,
+  wards,
+  pollingUnits,
+  loadingLgas,
+  loadingWards,
+  loadingPollingUnits,
+  loadLgas,
+  loadWards,
+  loadPollingUnits,
+} = useOgunGeo();
 
 const units = ref<AgentPollingUnit[]>([]);
 const loading = ref(true);
@@ -198,16 +216,18 @@ const editCount = ref(0);
 const savingEdit = ref(false);
 
 const form = reactive({
-  name: "",
+  pu_code: "",
   state: "Ogun State",
   ward: "",
   lga: "",
   device_type: "meta_rayban",
 });
 
+const selectedPu = computed(() => pollingUnits.value.find((p) => p.code === form.pu_code) ?? null);
+
 const previewCode = computed(() => {
-  if (!form.lga || !form.ward || !form.name) return "";
-  return buildPollingUnitCode(form.lga, form.ward, form.name);
+  if (!form.lga || !form.ward || !form.pu_code) return "";
+  return buildPollingUnitCode(form.lga, form.ward, form.pu_code);
 });
 
 const locationLocked = computed(() => !!(agent.value?.lga && agent.value?.ward));
@@ -225,12 +245,21 @@ async function applyAgentLocation() {
   form.lga = agent.value.lga;
   await loadWards(agent.value.lga);
   form.ward = agent.value.ward;
+  form.pu_code = "";
+  await loadPollingUnits(form.lga, form.ward);
 }
 
 async function onLgaChange() {
   if (locationLocked.value) return;
   form.ward = "";
+  form.pu_code = "";
+  pollingUnits.value = [];
   await loadWards(form.lga);
+}
+
+async function onWardChange() {
+  form.pu_code = "";
+  await loadPollingUnits(form.lga, form.ward);
 }
 
 async function loadUnits() {
@@ -245,15 +274,19 @@ async function loadUnits() {
 }
 
 async function createUnit() {
+  if (!selectedPu.value) {
+    createError.value = "Select a polling unit.";
+    return;
+  }
   creating.value = true;
   createError.value = "";
-  const code = buildPollingUnitCode(form.lga, form.ward, form.name);
+  const code = buildPollingUnitCode(form.lga, form.ward, form.pu_code);
   try {
     const res = await $fetch<PollingUnit & { ingest_token: string }>(`${apiBase}/polling-units`, {
       method: "POST",
       headers: authHeaders(),
       body: {
-        name: form.name,
+        name: selectedPu.value.name,
         state: form.state,
         lga: form.lga,
         ward: form.ward,
@@ -265,11 +298,14 @@ async function createUnit() {
     if (import.meta.client) {
       localStorage.setItem(`ingest_token_${res.code}`, res.ingest_token);
     }
-    form.name = "";
+    form.pu_code = "";
     if (!locationLocked.value) {
       form.ward = "";
       form.lga = "";
       wards.value = [];
+      pollingUnits.value = [];
+    } else {
+      await loadPollingUnits(form.lga, form.ward);
     }
     await loadUnits();
   } catch (err: unknown) {
