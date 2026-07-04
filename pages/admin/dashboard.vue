@@ -145,7 +145,7 @@
       </div>
     </section>
 
-    <section v-else class="ui-card overflow-hidden">
+    <section v-else-if="activeTab === 'agents'" class="ui-card overflow-hidden">
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
         <div>
           <h2 class="font-semibold text-ui-text">Field agents</h2>
@@ -294,29 +294,25 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-ui-border/30">
-              <tr v-for="c in dataCredits" :key="c.id">
+              <tr v-for="credit in dataCredits" :key="credit.id">
                 <td class="px-4 py-2">
-                  <p class="text-ui-text">{{ c.agent_name || "—" }}</p>
-                  <p class="text-xs text-ui-muted">{{ c.agent_email }}</p>
+                  <p class="text-ui-text">{{ credit.agent_name || "—" }}</p>
+                  <p class="text-xs text-ui-muted">{{ credit.agent_email || "—" }}</p>
                 </td>
-                <td class="px-4 py-2 text-ui-muted">{{ c.phone }} · {{ c.network }}</td>
+                <td class="px-4 py-2 text-ui-muted">{{ credit.phone || "—" }} · {{ credit.network || "—" }}</td>
                 <td class="px-4 py-2">
-                  <p class="text-ui-text">{{ c.plan_name }}</p>
-                  <p class="text-xs text-ui-muted">₦{{ c.amount.toLocaleString() }}</p>
+                  <p class="text-ui-text">{{ credit.plan_name || "—" }}</p>
+                  <p class="text-xs text-ui-muted">₦{{ (credit.amount ?? 0).toLocaleString() }}</p>
                 </td>
                 <td class="px-4 py-2">
                   <span
                     class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                    :class="c.status === 'delivered' || c.status === 'successful'
-                      ? 'bg-emerald-500/15 text-emerald-600'
-                      : c.status === 'failed'
-                        ? 'bg-red-500/15 text-red-600'
-                        : 'bg-amber-500/15 text-amber-600'"
+                    :class="creditStatusClass(credit.status)"
                   >
-                    {{ c.status }}
+                    {{ credit.status || "unknown" }}
                   </span>
                 </td>
-                <td class="px-4 py-2 text-xs text-ui-muted">{{ formatWhen(c.created_at) }}</td>
+                <td class="px-4 py-2 text-xs text-ui-muted">{{ formatWhen(credit.created_at) }}</td>
               </tr>
             </tbody>
           </table>
@@ -440,6 +436,16 @@ function formatWhen(iso: string) {
   } catch {
     return iso;
   }
+}
+
+function creditStatusClass(status?: string | null) {
+  if (status === "delivered" || status === "successful") {
+    return "bg-emerald-500/15 text-emerald-600";
+  }
+  if (status === "failed") {
+    return "bg-red-500/15 text-red-600";
+  }
+  return "bg-amber-500/15 text-amber-600";
 }
 
 const snapsByLga = computed(() => groupSnapsByLgaAndWard(snaps.value));
