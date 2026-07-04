@@ -18,6 +18,122 @@
     </section>
 
     <section class="ui-card p-6">
+      <h2 class="font-semibold text-ui-text">Claim data credit</h2>
+      <p class="mt-1 text-xs text-ui-muted">
+        Enter your phone number and network. You can only claim plans enabled by admin.
+      </p>
+      <p
+        class="mt-2 text-xs font-medium"
+        :class="dataQuota && dataQuota.data_claims_remaining > 0
+          ? 'text-emerald-600 dark:text-emerald-400'
+          : 'text-amber-600 dark:text-amber-400'"
+      >
+        <template v-if="dataQuota">
+          Claims remaining: {{ dataQuota.data_claims_remaining }}
+          (used {{ dataQuota.data_claims_used }} of {{ dataQuota.data_claim_limit }})
+        </template>
+        <template v-else>Loading claim allowance…</template>
+      </p>
+
+      <form class="mt-4 space-y-4" @submit.prevent="creditData">
+        <label class="block">
+          <span class="text-xs text-ui-muted">Phone number</span>
+          <input
+            v-model="dataForm.phone"
+            type="tel"
+            required
+            placeholder="08012345678"
+            class="ui-input mt-1"
+          />
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-ui-muted">Network</span>
+          <select v-model="dataForm.network" required class="ui-input mt-1" @change="onDataNetworkChange">
+            <option value="" disabled>Select network</option>
+            <option value="mtn">MTN</option>
+            <option value="airtel">Airtel</option>
+            <option value="glo">Glo</option>
+            <option value="9mobile">9mobile</option>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-ui-muted">Data plan</span>
+          <select
+            v-model="dataForm.variation_code"
+            required
+            class="ui-input mt-1"
+            :disabled="!dataForm.network || !agentDataPlans.length"
+          >
+            <option value="" disabled>
+              {{
+                !dataForm.network
+                  ? "Select network first"
+                  : loadingDataPlans
+                    ? "Loading plans…"
+                    : agentDataPlans.length
+                      ? "Select plan"
+                      : "No plans enabled for this network"
+              }}
+            </option>
+            <option v-for="plan in agentDataPlans" :key="plan.variation_code" :value="plan.variation_code">
+              {{ plan.name }} — ₦{{ plan.amount.toLocaleString() }}
+            </option>
+          </select>
+        </label>
+
+        <button
+          type="submit"
+          class="rounded-lg bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-500 disabled:opacity-50"
+          :disabled="
+            creditingData
+              || !dataForm.phone
+              || !dataForm.network
+              || !dataForm.variation_code
+              || (dataQuota !== null && dataQuota.data_claims_remaining <= 0)
+          "
+        >
+          {{
+            dataQuota && dataQuota.data_claims_remaining <= 0
+              ? "No claims left"
+              : creditingData
+                ? "Crediting…"
+                : "Credit data"
+          }}
+        </button>
+        <p v-if="dataMessage" class="text-sm text-emerald-600 dark:text-emerald-400">{{ dataMessage }}</p>
+        <p v-if="dataError" class="text-sm text-red-500">{{ dataError }}</p>
+      </form>
+
+      <div v-if="dataCredits.length" class="mt-5 border-t border-ui-border/40 pt-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">Your recent credits</h3>
+        <ul class="mt-2 space-y-2">
+          <li
+            v-for="c in dataCredits"
+            :key="c.id"
+            class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 px-3 py-2 text-xs"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="font-medium text-ui-text">{{ c.plan_name }}</span>
+              <span
+                class="rounded-full px-2 py-0.5 font-semibold"
+                :class="c.status === 'delivered' || c.status === 'successful'
+                  ? 'bg-emerald-500/15 text-emerald-600'
+                  : c.status === 'failed'
+                    ? 'bg-red-500/15 text-red-600'
+                    : 'bg-amber-500/15 text-amber-600'"
+              >
+                {{ c.status }}
+              </span>
+            </div>
+            <p class="mt-1 text-ui-muted">{{ c.phone }} · {{ c.network }} · ₦{{ c.amount.toLocaleString() }}</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="ui-card p-6">
       <h2 class="font-semibold text-ui-text">Register polling unit</h2>
       <p class="mt-1 text-xs text-ui-muted">
         <template v-if="agent?.lga && agent?.ward">
@@ -215,6 +331,40 @@ const editingCode = ref<string | null>(null);
 const editCount = ref(0);
 const savingEdit = ref(false);
 
+type AgentDataPlan = {
+  network: string;
+  variation_code: string;
+  name: string;
+  amount: number;
+};
+
+type AgentDataCredit = {
+  id: string;
+  phone: string;
+  network: string;
+  plan_name: string;
+  amount: number;
+  status: string;
+  created_at: string;
+};
+
+const dataForm = reactive({
+  phone: "",
+  network: "",
+  variation_code: "",
+});
+const agentDataPlans = ref<AgentDataPlan[]>([]);
+const dataCredits = ref<AgentDataCredit[]>([]);
+const dataQuota = ref<{
+  data_claim_limit: number;
+  data_claims_used: number;
+  data_claims_remaining: number;
+} | null>(null);
+const loadingDataPlans = ref(false);
+const creditingData = ref(false);
+const dataMessage = ref("");
+const dataError = ref("");
+
 const form = reactive({
   pu_code: "",
   state: "Ogun State",
@@ -237,8 +387,75 @@ onMounted(async () => {
   await loadLgas();
   await fetchMe();
   await applyAgentLocation();
-  await loadUnits();
+  await Promise.all([loadUnits(), loadDataCredits(), loadDataQuota()]);
 });
+
+async function loadDataQuota() {
+  try {
+    dataQuota.value = await $fetch(`${apiBase}/agents/me/data/quota`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    dataQuota.value = { data_claim_limit: 1, data_claims_used: 0, data_claims_remaining: 1 };
+  }
+}
+
+async function onDataNetworkChange() {
+  dataForm.variation_code = "";
+  dataMessage.value = "";
+  dataError.value = "";
+  if (!dataForm.network) {
+    agentDataPlans.value = [];
+    return;
+  }
+  loadingDataPlans.value = true;
+  try {
+    agentDataPlans.value = await $fetch<AgentDataPlan[]>(`${apiBase}/agents/me/data/plans`, {
+      headers: authHeaders(),
+      query: { network: dataForm.network },
+    });
+  } catch {
+    agentDataPlans.value = [];
+    dataError.value = "Could not load data plans. Ask admin to enable plans.";
+  } finally {
+    loadingDataPlans.value = false;
+  }
+}
+
+async function loadDataCredits() {
+  try {
+    dataCredits.value = await $fetch<AgentDataCredit[]>(`${apiBase}/agents/me/data/credits`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    dataCredits.value = [];
+  }
+}
+
+async function creditData() {
+  dataMessage.value = "";
+  dataError.value = "";
+  creditingData.value = true;
+  try {
+    const res = await $fetch<AgentDataCredit>(`${apiBase}/agents/me/data/credit`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: {
+        phone: dataForm.phone,
+        network: dataForm.network,
+        variation_code: dataForm.variation_code,
+      },
+    });
+    dataMessage.value = `Data credited successfully (${res.plan_name}). Status: ${res.status}.`;
+    await Promise.all([loadDataCredits(), loadDataQuota()]);
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    dataError.value = typeof detail === "string" ? detail : "Failed to credit data.";
+    await loadDataQuota();
+  } finally {
+    creditingData.value = false;
+  }
+}
 
 async function applyAgentLocation() {
   if (!agent.value?.lga || !agent.value?.ward) return;

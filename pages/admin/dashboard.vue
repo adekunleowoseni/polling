@@ -176,7 +176,7 @@
             {{ agent.ward }} · {{ agent.lga }}
           </p>
           <p v-else class="mt-2 text-xs text-amber-600 dark:text-amber-400">Unassigned</p>
-          <dl class="mt-3 grid grid-cols-2 gap-2 text-xs">
+          <dl class="mt-3 grid grid-cols-3 gap-2 text-xs">
             <div class="rounded bg-ui-surface/50 px-2 py-1">
               <dt class="text-ui-muted">Units</dt>
               <dd class="font-semibold text-ui-text">{{ agent.polling_unit_count }}</dd>
@@ -185,9 +185,142 @@
               <dt class="text-ui-muted">Live</dt>
               <dd class="font-semibold text-red-600 dark:text-red-400">{{ agent.live_unit_count }}</dd>
             </div>
+            <div class="rounded bg-ui-surface/50 px-2 py-1">
+              <dt class="text-ui-muted">Data</dt>
+              <dd class="font-semibold text-ui-text">
+                {{ agent.data_claims_used ?? 0 }}/{{ agent.data_claim_limit ?? 1 }}
+              </dd>
+            </div>
           </dl>
           <p class="mt-3 text-[10px] text-violet-600 dark:text-violet-400">Manage →</p>
         </button>
+      </div>
+    </section>
+
+    <section v-else-if="activeTab === 'data'" class="space-y-4">
+      <div class="ui-card p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="font-semibold text-ui-text">Agent data credit (VTpass)</h2>
+            <p class="mt-1 text-xs text-ui-muted">
+              Load plans from VTpass, then enable only the ones agents may claim.
+            </p>
+          </div>
+          <span
+            class="rounded-full px-2 py-1 text-xs font-semibold"
+            :class="vtpassConfigured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'"
+          >
+            {{ vtpassConfigured ? "VTpass configured" : "VTpass not configured" }}
+          </span>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-end gap-3">
+          <label class="min-w-[140px]">
+            <span class="text-xs text-ui-muted">Network</span>
+            <select v-model="dataNetwork" class="ui-input mt-1" @change="loadCatalog">
+              <option v-for="n in dataNetworks" :key="n.id" :value="n.id">{{ n.label }}</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            class="rounded-lg bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-500 disabled:opacity-50"
+            :disabled="loadingCatalog || !vtpassConfigured"
+            @click="loadCatalog"
+          >
+            {{ loadingCatalog ? "Loading…" : "Load VTpass plans" }}
+          </button>
+          <button
+            type="button"
+            class="rounded-lg border border-ui-border/50 px-4 py-2 text-sm hover:bg-ui-muted/10 disabled:opacity-50"
+            :disabled="savingPlans"
+            @click="saveDataPlans"
+          >
+            {{ savingPlans ? "Saving…" : "Save enabled plans" }}
+          </button>
+        </div>
+      </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-3">
+          <h3 class="text-sm font-semibold text-ui-text">
+            {{ dataNetwork.toUpperCase() }} plans
+            <span class="font-normal text-ui-muted">(tick to enable for agents)</span>
+          </h3>
+        </div>
+        <div v-if="loadingCatalog" class="p-8 text-center text-sm text-ui-muted">Loading catalog…</div>
+        <div v-else-if="!catalogPlans.length" class="p-8 text-center text-sm text-ui-muted">
+          Load plans from VTpass for this network.
+        </div>
+        <ul v-else class="divide-y divide-ui-border/30 max-h-[28rem] overflow-y-auto">
+          <li
+            v-for="plan in catalogPlans"
+            :key="plan.variation_code"
+            class="flex items-center gap-3 px-5 py-3"
+          >
+            <input
+              :id="`plan-${plan.variation_code}`"
+              v-model="enabledPlanKeys"
+              type="checkbox"
+              class="h-4 w-4 rounded border-ui-border"
+              :value="planKey(plan)"
+            />
+            <label :for="`plan-${plan.variation_code}`" class="min-w-0 flex-1 cursor-pointer">
+              <p class="text-sm font-medium text-ui-text">{{ plan.name }}</p>
+              <p class="text-xs text-ui-muted">
+                {{ plan.variation_code }} · ₦{{ plan.amount.toLocaleString() }}
+              </p>
+            </label>
+          </li>
+        </ul>
+      </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-3 flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-ui-text">Recent credits</h3>
+          <button type="button" class="text-xs text-violet-600 hover:underline" @click="loadDataCredits">
+            Refresh
+          </button>
+        </div>
+        <div v-if="!dataCredits.length" class="p-6 text-center text-sm text-ui-muted">No credits yet.</div>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
+                <th class="px-4 py-2">Agent</th>
+                <th class="px-4 py-2">Phone</th>
+                <th class="px-4 py-2">Plan</th>
+                <th class="px-4 py-2">Status</th>
+                <th class="px-4 py-2">When</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-ui-border/30">
+              <tr v-for="c in dataCredits" :key="c.id">
+                <td class="px-4 py-2">
+                  <p class="text-ui-text">{{ c.agent_name || "—" }}</p>
+                  <p class="text-xs text-ui-muted">{{ c.agent_email }}</p>
+                </td>
+                <td class="px-4 py-2 text-ui-muted">{{ c.phone }} · {{ c.network }}</td>
+                <td class="px-4 py-2">
+                  <p class="text-ui-text">{{ c.plan_name }}</p>
+                  <p class="text-xs text-ui-muted">₦{{ c.amount.toLocaleString() }}</p>
+                </td>
+                <td class="px-4 py-2">
+                  <span
+                    class="rounded-full px-2 py-0.5 text-xs font-semibold"
+                    :class="c.status === 'delivered' || c.status === 'successful'
+                      ? 'bg-emerald-500/15 text-emerald-600'
+                      : c.status === 'failed'
+                        ? 'bg-red-500/15 text-red-600'
+                        : 'bg-amber-500/15 text-amber-600'"
+                  >
+                    {{ c.status }}
+                  </span>
+                </td>
+                <td class="px-4 py-2 text-xs text-ui-muted">{{ formatWhen(c.created_at) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -222,6 +355,31 @@ type AdminAgentSummary = {
   created_at: string;
   polling_unit_count: number;
   live_unit_count: number;
+  data_claim_limit: number;
+  data_claims_used: number;
+};
+
+type DataPlan = {
+  network: string;
+  service_id: string;
+  variation_code: string;
+  name: string;
+  amount: number;
+  enabled: boolean;
+};
+
+type DataCredit = {
+  id: string;
+  phone: string;
+  network: string;
+  plan_name: string;
+  variation_code: string;
+  amount: number;
+  request_id: string;
+  status: string;
+  created_at: string;
+  agent_name?: string | null;
+  agent_email?: string | null;
 };
 
 definePageMeta({ layout: "default" });
@@ -235,6 +393,7 @@ const tabs = [
   { id: "feeds", label: "Live feeds" },
   { id: "snaps", label: "Pictures" },
   { id: "agents", label: "Agents" },
+  { id: "data", label: "Data plans" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -255,6 +414,33 @@ const loadingSnaps = ref(false);
 const loadingAgents = ref(false);
 const message = ref("");
 const actionError = ref("");
+
+const vtpassConfigured = ref(false);
+const dataNetworks = [
+  { id: "mtn", label: "MTN" },
+  { id: "airtel", label: "Airtel" },
+  { id: "glo", label: "Glo" },
+  { id: "9mobile", label: "9mobile" },
+];
+const dataNetwork = ref("mtn");
+const catalogPlans = ref<DataPlan[]>([]);
+const enabledPlanKeys = ref<string[]>([]);
+const savedPlans = ref<DataPlan[]>([]);
+const dataCredits = ref<DataCredit[]>([]);
+const loadingCatalog = ref(false);
+const savingPlans = ref(false);
+
+function planKey(plan: Pick<DataPlan, "network" | "variation_code">) {
+  return `${plan.network}::${plan.variation_code}`;
+}
+
+function formatWhen(iso: string) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
 
 const snapsByLga = computed(() => groupSnapsByLgaAndWard(snaps.value));
 
@@ -282,10 +468,15 @@ onMounted(async () => {
   await Promise.all([loadOverview(), loadUnits(), loadSnaps(), loadAgents()]);
 });
 
-watch(activeTab, (tab) => {
+watch(activeTab, async (tab) => {
   if (tab === "feeds" && !units.value.length) loadUnits();
   if (tab === "snaps" && !snaps.value.length) loadSnaps();
   if (tab === "agents" && !agents.value.length) loadAgents();
+  if (tab === "data") {
+    await loadVtpassStatus();
+    await loadSavedPlans();
+    await loadDataCredits();
+  }
 });
 
 function logout() {
@@ -362,6 +553,103 @@ async function onAgentUpdated() {
     );
   }
   await loadAgents();
+}
+
+async function loadVtpassStatus() {
+  try {
+    const res = await $fetch<{ configured: boolean }>(`${apiBase}/admin/data/status`, {
+      headers: authHeaders(),
+    });
+    vtpassConfigured.value = res.configured;
+  } catch {
+    vtpassConfigured.value = false;
+  }
+}
+
+async function loadSavedPlans() {
+  try {
+    savedPlans.value = await $fetch<DataPlan[]>(`${apiBase}/admin/data/plans`, {
+      headers: authHeaders(),
+    });
+    enabledPlanKeys.value = savedPlans.value
+      .filter((p) => p.enabled)
+      .map((p) => planKey(p));
+  } catch {
+    savedPlans.value = [];
+  }
+}
+
+async function loadCatalog() {
+  loadingCatalog.value = true;
+  clearFeedback();
+  try {
+    catalogPlans.value = await $fetch<DataPlan[]>(
+      `${apiBase}/admin/data/catalog/${dataNetwork.value}`,
+      { headers: authHeaders() },
+    );
+    // Keep ticks for plans already enabled on this network.
+    const enabled = new Set(enabledPlanKeys.value);
+    for (const p of savedPlans.value) {
+      if (p.network === dataNetwork.value && p.enabled) {
+        enabled.add(planKey(p));
+      }
+    }
+    enabledPlanKeys.value = [...enabled];
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    actionError.value = typeof detail === "string" ? detail : "Failed to load VTpass catalog.";
+    catalogPlans.value = [];
+  } finally {
+    loadingCatalog.value = false;
+  }
+}
+
+async function saveDataPlans() {
+  savingPlans.value = true;
+  clearFeedback();
+  try {
+    // Merge: keep enabled plans from other networks + selected from current catalog.
+    const otherNetworks = savedPlans.value.filter((p) => p.network !== dataNetwork.value && p.enabled);
+    const selected = catalogPlans.value.filter((p) => enabledPlanKeys.value.includes(planKey(p)));
+    const plans = [
+      ...otherNetworks.map((p) => ({
+        network: p.network,
+        variation_code: p.variation_code,
+        name: p.name,
+        amount: p.amount,
+        enabled: true,
+      })),
+      ...selected.map((p) => ({
+        network: p.network,
+        variation_code: p.variation_code,
+        name: p.name,
+        amount: p.amount,
+        enabled: true,
+      })),
+    ];
+    savedPlans.value = await $fetch<DataPlan[]>(`${apiBase}/admin/data/plans`, {
+      method: "PUT",
+      headers: authHeaders(),
+      body: { plans },
+    });
+    enabledPlanKeys.value = savedPlans.value.filter((p) => p.enabled).map((p) => planKey(p));
+    message.value = `Saved ${savedPlans.value.length} enabled data plan(s).`;
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    actionError.value = typeof detail === "string" ? detail : "Failed to save data plans.";
+  } finally {
+    savingPlans.value = false;
+  }
+}
+
+async function loadDataCredits() {
+  try {
+    dataCredits.value = await $fetch<DataCredit[]>(`${apiBase}/admin/data/credits`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    dataCredits.value = [];
+  }
 }
 
 async function onAgentDeleted(id: string) {
