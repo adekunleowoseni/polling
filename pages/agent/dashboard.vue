@@ -277,7 +277,7 @@
                 }}
               </option>
               <option v-for="pu in pollingUnits" :key="pu.code" :value="pu.code">
-                {{ pu.name }}
+                {{ pu.code }} — {{ pu.name }}
               </option>
             </select>
           </label>
@@ -468,7 +468,6 @@
 
 <script setup lang="ts">
 import type { PollingUnit } from "~/composables/useVideoFeeds";
-import { buildPollingUnitCode } from "~/composables/useOgunGeo";
 
 type AgentPollingUnit = PollingUnit & { ingest_token: string };
 
@@ -553,10 +552,7 @@ const form = reactive({
 
 const selectedPu = computed(() => pollingUnits.value.find((p) => p.code === form.pu_code) ?? null);
 
-const previewCode = computed(() => {
-  if (!form.lga || !form.ward || !form.pu_code) return "";
-  return buildPollingUnitCode(form.lga, form.ward, form.pu_code);
-});
+const previewCode = computed(() => form.pu_code || "");
 
 const locationLocked = computed(() => !!(agent.value?.lga && agent.value?.ward));
 
@@ -743,7 +739,7 @@ async function createUnit() {
   }
   creating.value = true;
   createError.value = "";
-  const code = buildPollingUnitCode(form.lga, form.ward, form.pu_code);
+  const code = form.pu_code.toLowerCase();
   try {
     const res = await $fetch<PollingUnit & { ingest_token: string }>(`${apiBase}/polling-units`, {
       method: "POST",
