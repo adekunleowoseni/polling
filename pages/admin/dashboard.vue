@@ -291,6 +291,32 @@
 
     <section v-else-if="activeTab === 'data'" class="space-y-4">
       <div class="ui-card p-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h2 class="font-semibold text-ui-text">Strict rule</h2>
+            <p class="mt-1 text-xs text-ui-muted">
+              When on, a phone number can claim data <strong>only once</strong>. Repeat attempts are blocked.
+            </p>
+          </div>
+          <label class="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              class="peer sr-only"
+              :checked="appSettings.strict_one_data_claim_per_phone"
+              :disabled="savingSettings"
+              @change="saveAppSettings({ strict_one_data_claim_per_phone: ($event.target as HTMLInputElement).checked })"
+            />
+            <span
+              class="relative h-6 w-11 rounded-full bg-ui-muted/30 transition peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5"
+            />
+            <span class="text-xs font-medium text-ui-text">
+              {{ appSettings.strict_one_data_claim_per_phone ? "Active" : "Inactive" }}
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="ui-card p-5">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 class="font-semibold text-ui-text">Agent data credit (VTpass)</h2>
@@ -412,6 +438,161 @@
       </div>
     </section>
 
+    <section v-else-if="activeTab === 'airtime'" class="space-y-4">
+      <div class="ui-card p-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h2 class="font-semibold text-ui-text">Strict rule</h2>
+            <p class="mt-1 text-xs text-ui-muted">
+              When on, a phone number can claim airtime <strong>only once</strong>. Repeat attempts are blocked.
+            </p>
+          </div>
+          <label class="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              class="peer sr-only"
+              :checked="appSettings.strict_one_airtime_claim_per_phone"
+              :disabled="savingSettings"
+              @change="saveAppSettings({ strict_one_airtime_claim_per_phone: ($event.target as HTMLInputElement).checked })"
+            />
+            <span
+              class="relative h-6 w-11 rounded-full bg-ui-muted/30 transition peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5"
+            />
+            <span class="text-xs font-medium text-ui-text">
+              {{ appSettings.strict_one_airtime_claim_per_phone ? "Active" : "Inactive" }}
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="ui-card p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="font-semibold text-ui-text">Agent airtime (VTpass)</h2>
+            <p class="mt-1 text-xs text-ui-muted">
+              Control which airtime amounts agents can buy. Tick to enable, then save.
+            </p>
+          </div>
+          <span
+            class="rounded-full px-2 py-1 text-xs font-semibold"
+            :class="vtpassConfigured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'"
+          >
+            {{ vtpassConfigured ? "VTpass configured" : "VTpass not configured" }}
+          </span>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-end gap-3">
+          <label class="min-w-[160px]">
+            <span class="text-xs text-ui-muted">Add amount (₦)</span>
+            <input
+              v-model.number="newAirtimeAmount"
+              type="number"
+              min="1"
+              step="50"
+              placeholder="e.g. 750"
+              class="ui-input mt-1"
+              @keyup.enter="addAirtimeAmount"
+            />
+          </label>
+          <button
+            type="button"
+            class="rounded-lg border border-ui-border/50 px-4 py-2 text-sm hover:bg-ui-muted/10"
+            @click="addAirtimeAmount"
+          >
+            Add amount
+          </button>
+          <button
+            type="button"
+            class="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
+            :disabled="savingAirtime"
+            @click="saveAirtimeAmounts"
+          >
+            {{ savingAirtime ? "Saving…" : "Save amounts" }}
+          </button>
+        </div>
+      </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-3">
+          <h3 class="text-sm font-semibold text-ui-text">
+            Airtime amounts
+            <span class="font-normal text-ui-muted">(tick to enable for agents)</span>
+          </h3>
+        </div>
+        <div v-if="loadingAirtime" class="p-8 text-center text-sm text-ui-muted">Loading amounts…</div>
+        <div v-else-if="!airtimeAmounts.length" class="p-8 text-center text-sm text-ui-muted">
+          No amounts yet. Add one above.
+        </div>
+        <ul v-else class="divide-y divide-ui-border/30 max-h-[28rem] overflow-y-auto">
+          <li
+            v-for="opt in airtimeAmounts"
+            :key="opt.amount"
+            class="flex items-center gap-3 px-5 py-3"
+          >
+            <input
+              :id="`airtime-${opt.amount}`"
+              v-model="opt.enabled"
+              type="checkbox"
+              class="h-4 w-4 rounded border-ui-border"
+            />
+            <label :for="`airtime-${opt.amount}`" class="min-w-0 flex-1 cursor-pointer">
+              <p class="text-sm font-medium text-ui-text">₦{{ opt.amount.toLocaleString() }}</p>
+              <p class="text-xs text-ui-muted">{{ opt.enabled ? "Enabled" : "Disabled" }}</p>
+            </label>
+            <button
+              type="button"
+              class="rounded-lg border border-red-500/40 px-2.5 py-1 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
+              @click="removeAirtimeAmount(opt.amount)"
+            >
+              Remove
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-3 flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-ui-text">Recent airtime</h3>
+          <button type="button" class="text-xs text-amber-600 hover:underline" @click="loadAirtimeCredits">
+            Refresh
+          </button>
+        </div>
+        <div v-if="!airtimeCredits.length" class="p-6 text-center text-sm text-ui-muted">No airtime yet.</div>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
+                <th class="px-4 py-2">Agent</th>
+                <th class="px-4 py-2">Phone</th>
+                <th class="px-4 py-2">Amount</th>
+                <th class="px-4 py-2">Status</th>
+                <th class="px-4 py-2">When</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-ui-border/30">
+              <tr v-for="credit in airtimeCredits" :key="credit.id">
+                <td class="px-4 py-2">
+                  <p class="text-ui-text">{{ credit.agent_name || "—" }}</p>
+                  <p class="text-xs text-ui-muted">{{ credit.agent_email || "—" }}</p>
+                </td>
+                <td class="px-4 py-2 text-ui-muted">{{ credit.phone || "—" }} · {{ credit.network || "—" }}</td>
+                <td class="px-4 py-2 text-ui-text">₦{{ (credit.amount ?? 0).toLocaleString() }}</td>
+                <td class="px-4 py-2">
+                  <span
+                    class="rounded-full px-2 py-0.5 text-xs font-semibold"
+                    :class="creditStatusClass(credit.status)"
+                  >
+                    {{ credit.status || "unknown" }}
+                  </span>
+                </td>
+                <td class="px-4 py-2 text-xs text-ui-muted">{{ formatWhen(credit.created_at) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <AdminAgentManageModal
       :open="agentModalOpen"
       :loading="loadingAgentDetail"
@@ -445,6 +626,8 @@ type AdminAgentSummary = {
   live_unit_count: number;
   data_claim_limit: number;
   data_claims_used: number;
+  airtime_claim_limit: number;
+  airtime_claims_used: number;
 };
 
 type DataPlan = {
@@ -462,6 +645,28 @@ type DataCredit = {
   network: string;
   plan_name: string;
   variation_code: string;
+  amount: number;
+  request_id: string;
+  status: string;
+  created_at: string;
+  agent_name?: string | null;
+  agent_email?: string | null;
+};
+
+type AirtimeAmount = {
+  amount: number;
+  enabled: boolean;
+};
+
+type AppSettings = {
+  strict_one_data_claim_per_phone: boolean;
+  strict_one_airtime_claim_per_phone: boolean;
+};
+
+type AirtimeCredit = {
+  id: string;
+  phone: string;
+  network: string;
   amount: number;
   request_id: string;
   status: string;
@@ -500,6 +705,7 @@ const tabs = [
   { id: "recordings", label: "Recordings" },
   { id: "agents", label: "Agents" },
   { id: "data", label: "Data plans" },
+  { id: "airtime", label: "Airtime" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -541,6 +747,18 @@ const savedPlans = ref<DataPlan[]>([]);
 const dataCredits = ref<DataCredit[]>([]);
 const loadingCatalog = ref(false);
 const savingPlans = ref(false);
+
+const airtimeAmounts = ref<AirtimeAmount[]>([]);
+const airtimeCredits = ref<AirtimeCredit[]>([]);
+const newAirtimeAmount = ref<number | null>(null);
+const loadingAirtime = ref(false);
+const savingAirtime = ref(false);
+
+const appSettings = ref<AppSettings>({
+  strict_one_data_claim_per_phone: false,
+  strict_one_airtime_claim_per_phone: false,
+});
+const savingSettings = ref(false);
 
 function planKey(plan: Pick<DataPlan, "network" | "variation_code">) {
   return `${plan.network}::${plan.variation_code}`;
@@ -619,6 +837,13 @@ watch(activeTab, async (tab) => {
     await loadVtpassStatus();
     await loadSavedPlans();
     await loadDataCredits();
+    await loadAppSettings();
+  }
+  if (tab === "airtime") {
+    await loadVtpassStatus();
+    await loadAirtimeAmounts();
+    await loadAirtimeCredits();
+    await loadAppSettings();
   }
 });
 
@@ -876,6 +1101,98 @@ async function loadDataCredits() {
     });
   } catch {
     dataCredits.value = [];
+  }
+}
+
+async function loadAirtimeAmounts() {
+  loadingAirtime.value = true;
+  try {
+    airtimeAmounts.value = await $fetch<AirtimeAmount[]>(`${apiBase}/admin/airtime/amounts`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    airtimeAmounts.value = [];
+  } finally {
+    loadingAirtime.value = false;
+  }
+}
+
+function addAirtimeAmount() {
+  const value = Number(newAirtimeAmount.value);
+  if (!value || value <= 0) {
+    actionError.value = "Enter a valid airtime amount.";
+    return;
+  }
+  if (airtimeAmounts.value.some((a) => a.amount === value)) {
+    actionError.value = "That amount already exists.";
+    return;
+  }
+  airtimeAmounts.value = [...airtimeAmounts.value, { amount: value, enabled: true }].sort(
+    (a, b) => a.amount - b.amount,
+  );
+  newAirtimeAmount.value = null;
+  actionError.value = "";
+}
+
+function removeAirtimeAmount(amount: number) {
+  airtimeAmounts.value = airtimeAmounts.value.filter((a) => a.amount !== amount);
+}
+
+async function saveAirtimeAmounts() {
+  savingAirtime.value = true;
+  actionError.value = "";
+  try {
+    airtimeAmounts.value = await $fetch<AirtimeAmount[]>(`${apiBase}/admin/airtime/amounts`, {
+      method: "PUT",
+      headers: authHeaders(),
+      body: { plans: airtimeAmounts.value },
+    });
+    const enabled = airtimeAmounts.value.filter((a) => a.enabled).length;
+    message.value = `Saved ${airtimeAmounts.value.length} amount(s), ${enabled} enabled for agents.`;
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    actionError.value = typeof detail === "string" ? detail : "Failed to save airtime amounts.";
+  } finally {
+    savingAirtime.value = false;
+  }
+}
+
+async function loadAirtimeCredits() {
+  try {
+    airtimeCredits.value = await $fetch<AirtimeCredit[]>(`${apiBase}/admin/airtime/credits`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    airtimeCredits.value = [];
+  }
+}
+
+async function loadAppSettings() {
+  try {
+    appSettings.value = await $fetch<AppSettings>(`${apiBase}/admin/settings`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    // keep defaults
+  }
+}
+
+async function saveAppSettings(patch: Partial<AppSettings>) {
+  savingSettings.value = true;
+  actionError.value = "";
+  try {
+    appSettings.value = await $fetch<AppSettings>(`${apiBase}/admin/settings`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: patch,
+    });
+    message.value = "Rules updated.";
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    actionError.value = typeof detail === "string" ? detail : "Failed to update rules.";
+    await loadAppSettings();
+  } finally {
+    savingSettings.value = false;
   }
 }
 

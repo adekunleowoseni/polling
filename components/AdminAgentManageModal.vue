@@ -61,6 +61,34 @@
           </section>
 
           <section class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-4">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">Airtime claim allowance</h3>
+            <p class="mt-1 text-xs text-ui-muted">
+              Used {{ agent.airtime_claims_used }} of {{ agent.airtime_claim_limit }} claim(s).
+              Default is 1; increase to allow more airtime top-ups.
+            </p>
+            <div class="mt-3 flex flex-wrap items-end gap-3">
+              <label class="min-w-[120px]">
+                <span class="text-[10px] uppercase text-ui-muted">Allowed claims</span>
+                <input
+                  v-model.number="editAirtimeLimit"
+                  type="number"
+                  min="0"
+                  max="1000"
+                  class="ui-input mt-1 text-sm"
+                />
+              </label>
+              <button
+                type="button"
+                class="rounded-lg bg-amber-600 px-4 py-2 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                :disabled="savingAirtime || editAirtimeLimit < 0"
+                @click="saveAirtimeLimit"
+              >
+                {{ savingAirtime ? "Saving…" : "Save claims" }}
+              </button>
+            </div>
+          </section>
+
+          <section class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-4">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">LGA / ward assignment</h3>
             <div class="mt-3 flex flex-wrap items-end gap-3">
               <label class="min-w-[140px] flex-1">
@@ -145,6 +173,8 @@ export type AdminAgentDetail = {
   created_at: string;
   data_claim_limit: number;
   data_claims_used: number;
+  airtime_claim_limit: number;
+  airtime_claims_used: number;
   polling_units: {
     id: string;
     name: string;
@@ -175,9 +205,11 @@ const emit = defineEmits<{
 const editLga = ref("");
 const editWard = ref("");
 const editClaimLimit = ref(1);
+const editAirtimeLimit = ref(1);
 const wards = ref<string[]>([]);
 const saving = ref(false);
 const savingClaims = ref(false);
+const savingAirtime = ref(false);
 const deleting = ref(false);
 
 watch(
@@ -187,6 +219,7 @@ watch(
     editLga.value = agent.lga ?? "";
     editWard.value = agent.ward ?? "";
     editClaimLimit.value = agent.data_claim_limit ?? 1;
+    editAirtimeLimit.value = agent.airtime_claim_limit ?? 1;
     if (editLga.value) {
       wards.value = await $fetch<string[]>(
         `${props.apiBase}/geo/states/ogun/lgas/${encodeURIComponent(editLga.value)}/wards`,
@@ -235,6 +268,21 @@ async function saveClaimLimit() {
     emit("updated");
   } finally {
     savingClaims.value = false;
+  }
+}
+
+async function saveAirtimeLimit() {
+  if (!props.agent || editAirtimeLimit.value < 0) return;
+  savingAirtime.value = true;
+  try {
+    await $fetch(`${props.apiBase}/admin/agents/${props.agent.id}/airtime-claims`, {
+      method: "PATCH",
+      headers: props.authHeaders(),
+      body: { airtime_claim_limit: editAirtimeLimit.value },
+    });
+    emit("updated");
+  } finally {
+    savingAirtime.value = false;
   }
 }
 

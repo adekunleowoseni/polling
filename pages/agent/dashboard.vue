@@ -463,6 +463,130 @@
         </ul>
       </div>
     </section>
+
+    <!-- Airtime -->
+    <section v-else-if="activeTab === 'airtime'" class="space-y-4">
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div class="ui-card p-4 sm:col-span-1">
+          <p class="text-xs uppercase tracking-wider text-ui-muted">Claim allowance</p>
+          <template v-if="airtimeQuota">
+            <p class="mt-2 text-3xl font-bold text-amber-600 dark:text-amber-400">
+              {{ airtimeQuota.airtime_claims_remaining }}
+            </p>
+            <p class="mt-1 text-xs text-ui-muted">
+              remaining · used {{ airtimeQuota.airtime_claims_used }} of {{ airtimeQuota.airtime_claim_limit }}
+            </p>
+          </template>
+          <p v-else class="mt-2 text-sm text-ui-muted">Loading…</p>
+        </div>
+
+        <div class="ui-card overflow-hidden sm:col-span-2">
+          <div class="border-b border-ui-border/40 px-5 py-4">
+            <h2 class="font-semibold text-ui-text">Buy airtime</h2>
+            <p class="mt-1 text-xs text-ui-muted">
+              Enter phone and network. Only admin-enabled amounts are available.
+            </p>
+          </div>
+
+          <form class="space-y-4 p-5" @submit.prevent="creditAirtime">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block sm:col-span-2">
+                <span class="text-xs text-ui-muted">Phone number</span>
+                <input
+                  v-model="airtimeForm.phone"
+                  type="tel"
+                  required
+                  placeholder="08012345678"
+                  class="ui-input mt-1"
+                />
+              </label>
+
+              <label class="block">
+                <span class="text-xs text-ui-muted">Network</span>
+                <select v-model="airtimeForm.network" required class="ui-input mt-1">
+                  <option value="" disabled>Select network</option>
+                  <option value="mtn">MTN</option>
+                  <option value="airtel">Airtel</option>
+                  <option value="glo">Glo</option>
+                  <option value="9mobile">9mobile</option>
+                </select>
+              </label>
+
+              <label class="block">
+                <span class="text-xs text-ui-muted">Amount</span>
+                <select
+                  v-model.number="airtimeForm.amount"
+                  required
+                  class="ui-input mt-1"
+                  :disabled="!airtimeAmounts.length"
+                >
+                  <option :value="0" disabled>
+                    {{ airtimeAmounts.length ? 'Select amount' : 'No amounts enabled' }}
+                  </option>
+                  <option
+                    v-for="opt in airtimeAmounts"
+                    :key="opt.amount"
+                    :value="opt.amount"
+                  >
+                    ₦{{ opt.amount.toLocaleString() }}
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              class="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
+              :disabled="
+                creditingAirtime
+                  || !airtimeForm.phone
+                  || !airtimeForm.network
+                  || !airtimeForm.amount
+                  || (airtimeQuota !== null && airtimeQuota.airtime_claims_remaining <= 0)
+              "
+            >
+              {{
+                airtimeQuota && airtimeQuota.airtime_claims_remaining <= 0
+                  ? 'No claims left'
+                  : creditingAirtime
+                    ? 'Sending…'
+                    : 'Buy airtime'
+              }}
+            </button>
+            <p v-if="airtimeMessage" class="text-sm text-emerald-600 dark:text-emerald-400">{{ airtimeMessage }}</p>
+            <p v-if="airtimeError" class="text-sm text-red-500">{{ airtimeError }}</p>
+          </form>
+        </div>
+      </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-3">
+          <h3 class="text-sm font-semibold text-ui-text">Airtime history</h3>
+        </div>
+        <div v-if="!airtimeCredits.length" class="p-8 text-center text-sm text-ui-muted">
+          No airtime purchased yet.
+        </div>
+        <ul v-else class="divide-y divide-ui-border/30">
+          <li
+            v-for="credit in airtimeCredits"
+            :key="credit.id"
+            class="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+          >
+            <div>
+              <p class="text-sm font-medium text-ui-text">₦{{ credit.amount.toLocaleString() }} airtime</p>
+              <p class="text-xs text-ui-muted">{{ credit.phone }} · {{ credit.network }}</p>
+              <p class="mt-0.5 text-[10px] text-ui-muted">{{ formatWhen(credit.created_at) }}</p>
+            </div>
+            <span
+              class="rounded-full px-2 py-0.5 text-xs font-semibold"
+              :class="creditStatusClass(credit.status)"
+            >
+              {{ credit.status || 'unknown' }}
+            </span>
+          </li>
+        </ul>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -492,6 +616,7 @@ const tabs = [
   { id: "units", label: "My units" },
   { id: "register", label: "Register" },
   { id: "data", label: "Data credit" },
+  { id: "airtime", label: "Airtime" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -541,6 +666,36 @@ const loadingDataPlans = ref(false);
 const creditingData = ref(false);
 const dataMessage = ref("");
 const dataError = ref("");
+
+type AgentAirtimeAmount = {
+  amount: number;
+  enabled: boolean;
+};
+
+type AgentAirtimeCredit = {
+  id: string;
+  phone: string;
+  network: string;
+  amount: number;
+  status: string;
+  created_at: string;
+};
+
+const airtimeForm = reactive({
+  phone: "",
+  network: "",
+  amount: 0,
+});
+const airtimeAmounts = ref<AgentAirtimeAmount[]>([]);
+const airtimeCredits = ref<AgentAirtimeCredit[]>([]);
+const airtimeQuota = ref<{
+  airtime_claim_limit: number;
+  airtime_claims_used: number;
+  airtime_claims_remaining: number;
+} | null>(null);
+const creditingAirtime = ref(false);
+const airtimeMessage = ref("");
+const airtimeError = ref("");
 
 const form = reactive({
   pu_code: "",
@@ -595,6 +750,7 @@ const tabsWithBadges = computed(() =>
   tabs.map((tab) => {
     if (tab.id === "units") return { ...tab, badge: units.value.length || undefined };
     if (tab.id === "data") return { ...tab, badge: dataCredits.value.length || undefined };
+    if (tab.id === "airtime") return { ...tab, badge: airtimeCredits.value.length || undefined };
     return { ...tab, badge: undefined as number | undefined };
   }),
 );
@@ -629,7 +785,14 @@ onMounted(async () => {
   await loadLgas();
   await fetchMe();
   await applyAgentLocation();
-  await Promise.all([loadUnits(), loadDataCredits(), loadDataQuota()]);
+  await Promise.all([
+    loadUnits(),
+    loadDataCredits(),
+    loadDataQuota(),
+    loadAirtimeCredits(),
+    loadAirtimeQuota(),
+    loadAirtimeAmounts(),
+  ]);
 });
 
 async function loadDataQuota() {
@@ -696,6 +859,67 @@ async function creditData() {
     await loadDataQuota();
   } finally {
     creditingData.value = false;
+  }
+}
+
+async function loadAirtimeQuota() {
+  try {
+    airtimeQuota.value = await $fetch(`${apiBase}/agents/me/airtime/quota`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    airtimeQuota.value = {
+      airtime_claim_limit: 1,
+      airtime_claims_used: 0,
+      airtime_claims_remaining: 1,
+    };
+  }
+}
+
+async function loadAirtimeAmounts() {
+  try {
+    airtimeAmounts.value = await $fetch<AgentAirtimeAmount[]>(
+      `${apiBase}/agents/me/airtime/amounts`,
+      { headers: authHeaders() },
+    );
+  } catch {
+    airtimeAmounts.value = [];
+  }
+}
+
+async function loadAirtimeCredits() {
+  try {
+    airtimeCredits.value = await $fetch<AgentAirtimeCredit[]>(
+      `${apiBase}/agents/me/airtime/credits`,
+      { headers: authHeaders() },
+    );
+  } catch {
+    airtimeCredits.value = [];
+  }
+}
+
+async function creditAirtime() {
+  airtimeMessage.value = "";
+  airtimeError.value = "";
+  creditingAirtime.value = true;
+  try {
+    const res = await $fetch<AgentAirtimeCredit>(`${apiBase}/agents/me/airtime/credit`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: {
+        phone: airtimeForm.phone,
+        network: airtimeForm.network,
+        amount: airtimeForm.amount,
+      },
+    });
+    airtimeMessage.value = `Airtime of ₦${res.amount.toLocaleString()} sent to ${res.phone}. Status: ${res.status}.`;
+    await Promise.all([loadAirtimeCredits(), loadAirtimeQuota()]);
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    airtimeError.value = typeof detail === "string" ? detail : "Failed to send airtime.";
+    await loadAirtimeQuota();
+  } finally {
+    creditingAirtime.value = false;
   }
 }
 
