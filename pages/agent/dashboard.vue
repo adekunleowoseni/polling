@@ -343,9 +343,9 @@
 
         <div class="ui-card overflow-hidden sm:col-span-2">
           <div class="border-b border-ui-border/40 px-5 py-4">
-            <h2 class="font-semibold text-ui-text">Claim data credit</h2>
+            <h2 class="font-semibold text-ui-text">Claim data</h2>
             <p class="mt-1 text-xs text-ui-muted">
-              Enter your phone and network. Only admin-enabled plans are available.
+              Enter your phone; network is detected automatically. Only admin-enabled plans are available.
             </p>
           </div>
 
@@ -362,21 +362,21 @@
                 />
               </label>
 
-              <label class="block">
+              <div class="block">
                 <span class="text-xs text-ui-muted">Network</span>
-                <select
-                  v-model="dataForm.network"
-                  required
-                  class="ui-input mt-1"
-                  @change="onDataNetworkChange"
-                >
-                  <option value="" disabled>Select network</option>
-                  <option value="mtn">MTN</option>
-                  <option value="airtel">Airtel</option>
-                  <option value="glo">Glo</option>
-                  <option value="9mobile">9mobile</option>
-                </select>
-              </label>
+                <div class="ui-input mt-1 flex items-center gap-2">
+                  <template v-if="dataForm.network">
+                    <img
+                      :src="networkIcon(dataForm.network) || ''"
+                      :alt="networkLabel(dataForm.network)"
+                      class="h-5 w-auto rounded-sm"
+                    />
+                    <span class="text-sm text-ui-text">{{ networkLabel(dataForm.network) }}</span>
+                    <span class="ml-auto text-[10px] uppercase tracking-wide text-ui-muted">auto-detected</span>
+                  </template>
+                  <span v-else class="text-sm text-ui-muted">Enter phone to detect network</span>
+                </div>
+              </div>
 
               <label class="block">
                 <span class="text-xs text-ui-muted">Data plan</span>
@@ -435,7 +435,7 @@
 
       <div class="ui-card overflow-hidden">
         <div class="border-b border-ui-border/40 px-5 py-3">
-          <h3 class="text-sm font-semibold text-ui-text">Credit history</h3>
+          <h3 class="text-sm font-semibold text-ui-text">Claim history</h3>
         </div>
         <div v-if="!dataCredits.length" class="p-8 text-center text-sm text-ui-muted">
           No data credits claimed yet.
@@ -482,9 +482,9 @@
 
         <div class="ui-card overflow-hidden sm:col-span-2">
           <div class="border-b border-ui-border/40 px-5 py-4">
-            <h2 class="font-semibold text-ui-text">Buy airtime</h2>
+            <h2 class="font-semibold text-ui-text">Claim airtime</h2>
             <p class="mt-1 text-xs text-ui-muted">
-              Enter phone and network. Only admin-enabled amounts are available.
+              Enter phone; network is detected automatically. Only admin-enabled amounts are available.
             </p>
           </div>
 
@@ -501,16 +501,21 @@
                 />
               </label>
 
-              <label class="block">
+              <div class="block">
                 <span class="text-xs text-ui-muted">Network</span>
-                <select v-model="airtimeForm.network" required class="ui-input mt-1">
-                  <option value="" disabled>Select network</option>
-                  <option value="mtn">MTN</option>
-                  <option value="airtel">Airtel</option>
-                  <option value="glo">Glo</option>
-                  <option value="9mobile">9mobile</option>
-                </select>
-              </label>
+                <div class="ui-input mt-1 flex items-center gap-2">
+                  <template v-if="airtimeForm.network">
+                    <img
+                      :src="networkIcon(airtimeForm.network) || ''"
+                      :alt="networkLabel(airtimeForm.network)"
+                      class="h-5 w-auto rounded-sm"
+                    />
+                    <span class="text-sm text-ui-text">{{ networkLabel(airtimeForm.network) }}</span>
+                    <span class="ml-auto text-[10px] uppercase tracking-wide text-ui-muted">auto-detected</span>
+                  </template>
+                  <span v-else class="text-sm text-ui-muted">Enter phone to detect network</span>
+                </div>
+              </div>
 
               <label class="block">
                 <span class="text-xs text-ui-muted">Amount</span>
@@ -549,8 +554,8 @@
                 airtimeQuota && airtimeQuota.airtime_claims_remaining <= 0
                   ? 'No claims left'
                   : creditingAirtime
-                    ? 'Sending…'
-                    : 'Buy airtime'
+                    ? 'Claiming…'
+                    : 'Claim airtime'
               }}
             </button>
             <p v-if="airtimeMessage" class="text-sm text-emerald-600 dark:text-emerald-400">{{ airtimeMessage }}</p>
@@ -561,10 +566,10 @@
 
       <div class="ui-card overflow-hidden">
         <div class="border-b border-ui-border/40 px-5 py-3">
-          <h3 class="text-sm font-semibold text-ui-text">Airtime history</h3>
+          <h3 class="text-sm font-semibold text-ui-text">Claim history</h3>
         </div>
         <div v-if="!airtimeCredits.length" class="p-8 text-center text-sm text-ui-muted">
-          No airtime purchased yet.
+          No airtime claimed yet.
         </div>
         <ul v-else class="divide-y divide-ui-border/30">
           <li
@@ -600,6 +605,7 @@ definePageMeta({ layout: "default" });
 const config = useRuntimeConfig();
 const apiBase = config.public.apiBase;
 const { agent, authHeaders, requireAgent, clear, fetchMe } = useAgentAuth();
+const { detectNetwork, networkLabel, networkIcon } = useNetworkDetect();
 const {
   lgas,
   wards,
@@ -780,6 +786,30 @@ function toggleToken(code: string) {
   visibleTokens.value = next;
 }
 
+watch(
+  () => dataForm.phone,
+  (val) => {
+    const net = detectNetwork(val);
+    if (net) {
+      if (net !== dataForm.network) {
+        dataForm.network = net;
+        onDataNetworkChange();
+      }
+    } else if (dataForm.network) {
+      dataForm.network = "";
+      dataForm.variation_code = "";
+      agentDataPlans.value = [];
+    }
+  },
+);
+
+watch(
+  () => airtimeForm.phone,
+  (val) => {
+    airtimeForm.network = detectNetwork(val) ?? "";
+  },
+);
+
 onMounted(async () => {
   if (!requireAgent()) return;
   await loadLgas();
@@ -912,7 +942,7 @@ async function creditAirtime() {
         amount: airtimeForm.amount,
       },
     });
-    airtimeMessage.value = `Airtime of ₦${res.amount.toLocaleString()} sent to ${res.phone}. Status: ${res.status}.`;
+    airtimeMessage.value = `Airtime of ₦${res.amount.toLocaleString()} claimed for ${res.phone}. Status: ${res.status}.`;
     await Promise.all([loadAirtimeCredits(), loadAirtimeQuota()]);
   } catch (err: unknown) {
     const detail = (err as { data?: { detail?: string } })?.data?.detail;
