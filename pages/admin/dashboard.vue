@@ -145,6 +145,98 @@
       </div>
     </section>
 
+    <section v-else-if="activeTab === 'recordings'" class="ui-card overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
+        <div>
+          <h2 class="font-semibold text-ui-text">Saved feed recordings</h2>
+          <p class="text-xs text-ui-muted">
+            {{ recordings.length }} recording(s) · assembled from live relay frames
+          </p>
+        </div>
+        <button type="button" class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10" @click="loadRecordings">
+          Refresh
+        </button>
+      </div>
+
+      <div v-if="loadingRecordings" class="p-8 text-center text-sm text-ui-muted">Loading…</div>
+      <div v-else-if="!recordings.length" class="p-8 text-center text-sm text-ui-muted">
+        No recordings yet. They are created automatically while an agent is streaming.
+      </div>
+
+      <div v-else class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead>
+            <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
+              <th class="px-4 py-3">Polling unit</th>
+              <th class="px-4 py-3">Location</th>
+              <th class="px-4 py-3">Started</th>
+              <th class="px-4 py-3 text-right">Length</th>
+              <th class="px-4 py-3 text-right">Size</th>
+              <th class="px-4 py-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ui-border/30">
+            <tr v-for="rec in recordings" :key="rec.id">
+              <td class="px-4 py-3">
+                <p class="font-medium text-ui-text">{{ rec.polling_unit_name || rec.code }}</p>
+                <p class="text-xs text-ui-muted">{{ rec.code }}</p>
+              </td>
+              <td class="px-4 py-3 text-ui-muted">{{ rec.ward }} · {{ rec.lga }}</td>
+              <td class="px-4 py-3 text-ui-muted">
+                {{ formatWhen(rec.started_at) }}
+                <span
+                  v-if="rec.status === 'recording'"
+                  class="ml-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400"
+                >
+                  recording…
+                </span>
+              </td>
+              <td class="px-4 py-3 text-right text-ui-muted">{{ formatDuration(rec.duration_seconds) }}</td>
+              <td class="px-4 py-3 text-right text-ui-muted">{{ formatBytes(rec.file_size) }}</td>
+              <td class="px-4 py-3">
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="rounded border border-ui-border/50 px-2 py-1 text-xs hover:bg-ui-muted/10 disabled:opacity-50"
+                    :disabled="rec.status === 'recording' || busyRecording === rec.id"
+                    @click="playRecording(rec)"
+                  >
+                    {{ busyRecording === rec.id ? "Loading…" : "Play" }}
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded border border-ui-border/50 px-2 py-1 text-xs hover:bg-ui-muted/10 disabled:opacity-50"
+                    :disabled="rec.status === 'recording' || busyRecording === rec.id"
+                    @click="downloadRecording(rec)"
+                  >
+                    Download
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded border border-red-500/40 px-2 py-1 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
+                    @click="deleteRecording(rec.id)"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="playingRecordingUrl" class="border-t border-ui-border/40 p-5">
+        <div class="mb-2 flex items-center justify-between">
+          <p class="text-sm font-medium text-ui-text">{{ playingRecordingTitle }}</p>
+          <button type="button" class="text-xs text-ui-muted hover:text-ui-text" @click="closePlayer">Close</button>
+        </div>
+        <video :src="playingRecordingUrl" controls autoplay class="w-full rounded-lg bg-black" />
+        <p class="mt-2 text-xs text-ui-muted">
+          If the video does not play inline, use Download — the file plays in any desktop player (e.g. VLC).
+        </p>
+      </div>
+    </section>
+
     <section v-else-if="activeTab === 'agents'" class="ui-card overflow-hidden">
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
         <div>
@@ -378,6 +470,23 @@ type DataCredit = {
   agent_email?: string | null;
 };
 
+type FeedRecording = {
+  id: string;
+  polling_unit_id: string;
+  polling_unit_name: string;
+  code: string;
+  state: string;
+  ward: string;
+  lga: string;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number;
+  frame_count: number;
+  fps: number;
+  file_size: number;
+};
+
 definePageMeta({ layout: "default" });
 
 const router = useRouter();
@@ -388,6 +497,7 @@ const tabs = [
   { id: "overview", label: "Overview" },
   { id: "feeds", label: "Live feeds" },
   { id: "snaps", label: "Pictures" },
+  { id: "recordings", label: "Recordings" },
   { id: "agents", label: "Agents" },
   { id: "data", label: "Data plans" },
 ] as const;
@@ -404,6 +514,12 @@ const agentModalOpen = ref(false);
 const selectedAgent = ref<AdminAgentDetail | null>(null);
 const loadingAgentDetail = ref(false);
 const countEdits = ref<Record<string, number>>({});
+
+const recordings = ref<FeedRecording[]>([]);
+const loadingRecordings = ref(false);
+const busyRecording = ref<string | null>(null);
+const playingRecordingUrl = ref<string | null>(null);
+const playingRecordingTitle = ref("");
 
 const loadingUnits = ref(false);
 const loadingSnaps = ref(false);
@@ -436,6 +552,26 @@ function formatWhen(iso: string) {
   } catch {
     return iso;
   }
+}
+
+function formatDuration(seconds: number) {
+  const s = Math.max(0, Math.round(seconds || 0));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m <= 0) return `${rem}s`;
+  return `${m}m ${rem.toString().padStart(2, "0")}s`;
+}
+
+function formatBytes(bytes: number) {
+  if (!bytes) return "—";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i += 1;
+  }
+  return `${value.toFixed(value >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 function creditStatusClass(status?: string | null) {
@@ -477,12 +613,17 @@ onMounted(async () => {
 watch(activeTab, async (tab) => {
   if (tab === "feeds" && !units.value.length) loadUnits();
   if (tab === "snaps" && !snaps.value.length) loadSnaps();
+  if (tab === "recordings") loadRecordings();
   if (tab === "agents" && !agents.value.length) loadAgents();
   if (tab === "data") {
     await loadVtpassStatus();
     await loadSavedPlans();
     await loadDataCredits();
   }
+});
+
+onUnmounted(() => {
+  closePlayer();
 });
 
 function logout() {
@@ -531,6 +672,86 @@ async function loadAgents() {
     actionError.value = "Failed to load agents.";
   } finally {
     loadingAgents.value = false;
+  }
+}
+
+async function loadRecordings() {
+  loadingRecordings.value = true;
+  try {
+    recordings.value = await $fetch<FeedRecording[]>(`${apiBase}/admin/recordings`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    actionError.value = "Failed to load recordings.";
+  } finally {
+    loadingRecordings.value = false;
+  }
+}
+
+async function fetchRecordingBlob(id: string): Promise<Blob> {
+  const res = await fetch(`${apiBase}/admin/recordings/${id}/video`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch recording.");
+  return res.blob();
+}
+
+function closePlayer() {
+  if (playingRecordingUrl.value) URL.revokeObjectURL(playingRecordingUrl.value);
+  playingRecordingUrl.value = null;
+  playingRecordingTitle.value = "";
+}
+
+async function playRecording(rec: FeedRecording) {
+  actionError.value = "";
+  busyRecording.value = rec.id;
+  try {
+    closePlayer();
+    const blob = await fetchRecordingBlob(rec.id);
+    playingRecordingUrl.value = URL.createObjectURL(blob);
+    playingRecordingTitle.value = `${rec.polling_unit_name || rec.code} · ${formatWhen(rec.started_at)}`;
+  } catch {
+    actionError.value = "Could not load the recording for playback. Try downloading it instead.";
+  } finally {
+    busyRecording.value = null;
+  }
+}
+
+async function downloadRecording(rec: FeedRecording) {
+  actionError.value = "";
+  busyRecording.value = rec.id;
+  try {
+    const blob = await fetchRecordingBlob(rec.id);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${rec.code}-${rec.id}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch {
+    actionError.value = "Failed to download the recording.";
+  } finally {
+    busyRecording.value = null;
+  }
+}
+
+async function deleteRecording(id: string) {
+  if (!confirm("Delete this recording permanently?")) return;
+  actionError.value = "";
+  try {
+    await $fetch(`${apiBase}/admin/recordings/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (playingRecordingTitle.value && recordings.value.find((r) => r.id === id)) {
+      closePlayer();
+    }
+    recordings.value = recordings.value.filter((r) => r.id !== id);
+    message.value = "Recording deleted.";
+  } catch {
+    actionError.value = "Failed to delete the recording.";
   }
 }
 
