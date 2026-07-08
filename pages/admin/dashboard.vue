@@ -324,12 +324,33 @@
               Load plans from VTpass, then enable only the ones agents may claim.
             </p>
           </div>
-          <span
-            class="rounded-full px-2 py-1 text-xs font-semibold"
-            :class="vtpassConfigured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'"
-          >
-            {{ vtpassConfigured ? "VTpass configured" : "VTpass not configured" }}
-          </span>
+          <div class="flex flex-col items-end gap-1.5">
+            <span
+              class="rounded-full px-2 py-1 text-xs font-semibold"
+              :class="vtpassConfigured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'"
+            >
+              {{ vtpassConfigured ? "VTpass configured" : "VTpass not configured" }}
+            </span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-ui-muted">Wallet</span>
+              <span class="text-sm font-semibold text-ui-text">
+                {{
+                  loadingBalance
+                    ? "…"
+                    : vtpassBalance !== null
+                      ? `₦${vtpassBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : "—"
+                }}
+              </span>
+              <button
+                type="button"
+                class="text-[10px] uppercase tracking-wide text-sky-600 hover:underline"
+                @click="loadVtpassBalance"
+              >
+                refresh
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="mt-4 flex flex-wrap items-end gap-3">
@@ -473,12 +494,33 @@
               Control which airtime amounts agents can buy. Tick to enable, then save.
             </p>
           </div>
-          <span
-            class="rounded-full px-2 py-1 text-xs font-semibold"
-            :class="vtpassConfigured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'"
-          >
-            {{ vtpassConfigured ? "VTpass configured" : "VTpass not configured" }}
-          </span>
+          <div class="flex flex-col items-end gap-1.5">
+            <span
+              class="rounded-full px-2 py-1 text-xs font-semibold"
+              :class="vtpassConfigured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'"
+            >
+              {{ vtpassConfigured ? "VTpass configured" : "VTpass not configured" }}
+            </span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-ui-muted">Wallet</span>
+              <span class="text-sm font-semibold text-ui-text">
+                {{
+                  loadingBalance
+                    ? "…"
+                    : vtpassBalance !== null
+                      ? `₦${vtpassBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : "—"
+                }}
+              </span>
+              <button
+                type="button"
+                class="text-[10px] uppercase tracking-wide text-sky-600 hover:underline"
+                @click="loadVtpassBalance"
+              >
+                refresh
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="mt-4 flex flex-wrap items-end gap-3">
@@ -734,6 +776,8 @@ const message = ref("");
 const actionError = ref("");
 
 const vtpassConfigured = ref(false);
+const vtpassBalance = ref<number | null>(null);
+const loadingBalance = ref(false);
 const dataNetworks = [
   { id: "mtn", label: "MTN" },
   { id: "airtel", label: "Airtel" },
@@ -835,12 +879,14 @@ watch(activeTab, async (tab) => {
   if (tab === "agents" && !agents.value.length) loadAgents();
   if (tab === "data") {
     await loadVtpassStatus();
+    await loadVtpassBalance();
     await loadSavedPlans();
     await loadDataCredits();
     await loadAppSettings();
   }
   if (tab === "airtime") {
     await loadVtpassStatus();
+    await loadVtpassBalance();
     await loadAirtimeAmounts();
     await loadAirtimeCredits();
     await loadAppSettings();
@@ -1015,6 +1061,22 @@ async function loadVtpassStatus() {
     vtpassConfigured.value = res.configured;
   } catch {
     vtpassConfigured.value = false;
+  }
+}
+
+async function loadVtpassBalance() {
+  loadingBalance.value = true;
+  try {
+    const res = await $fetch<{ configured: boolean; balance: number | null }>(
+      `${apiBase}/admin/vtpass/balance`,
+      { headers: authHeaders() },
+    );
+    vtpassConfigured.value = res.configured;
+    vtpassBalance.value = res.balance;
+  } catch {
+    vtpassBalance.value = null;
+  } finally {
+    loadingBalance.value = false;
   }
 }
 

@@ -364,7 +364,7 @@
 
               <div class="block">
                 <span class="text-xs text-ui-muted">Network</span>
-                <div class="ui-input mt-1 flex items-center gap-2">
+                <div v-if="!showDataNetworkPicker" class="ui-input mt-1 flex items-center gap-2">
                   <template v-if="dataForm.network">
                     <img
                       :src="networkIcon(dataForm.network) || ''"
@@ -372,10 +372,29 @@
                       class="h-5 w-auto rounded-sm"
                     />
                     <span class="text-sm text-ui-text">{{ networkLabel(dataForm.network) }}</span>
-                    <span class="ml-auto text-[10px] uppercase tracking-wide text-ui-muted">auto-detected</span>
+                    <span class="text-[10px] uppercase tracking-wide text-ui-muted">auto</span>
                   </template>
-                  <span v-else class="text-sm text-ui-muted">Enter phone to detect network</span>
+                  <span v-else class="text-sm text-ui-muted">Enter phone to detect</span>
+                  <button
+                    type="button"
+                    class="ml-auto text-[10px] uppercase tracking-wide text-sky-600 hover:underline"
+                    @click="showDataNetworkPicker = true"
+                  >
+                    change
+                  </button>
                 </div>
+                <select
+                  v-else
+                  v-model="dataForm.network"
+                  class="ui-input mt-1"
+                  @change="onDataManualNetwork"
+                >
+                  <option value="" disabled>Select network</option>
+                  <option value="mtn">MTN</option>
+                  <option value="airtel">Airtel</option>
+                  <option value="glo">Glo</option>
+                  <option value="9mobile">9mobile</option>
+                </select>
               </div>
 
               <label class="block">
@@ -503,7 +522,7 @@
 
               <div class="block">
                 <span class="text-xs text-ui-muted">Network</span>
-                <div class="ui-input mt-1 flex items-center gap-2">
+                <div v-if="!showAirtimeNetworkPicker" class="ui-input mt-1 flex items-center gap-2">
                   <template v-if="airtimeForm.network">
                     <img
                       :src="networkIcon(airtimeForm.network) || ''"
@@ -511,10 +530,29 @@
                       class="h-5 w-auto rounded-sm"
                     />
                     <span class="text-sm text-ui-text">{{ networkLabel(airtimeForm.network) }}</span>
-                    <span class="ml-auto text-[10px] uppercase tracking-wide text-ui-muted">auto-detected</span>
+                    <span class="text-[10px] uppercase tracking-wide text-ui-muted">auto</span>
                   </template>
-                  <span v-else class="text-sm text-ui-muted">Enter phone to detect network</span>
+                  <span v-else class="text-sm text-ui-muted">Enter phone to detect</span>
+                  <button
+                    type="button"
+                    class="ml-auto text-[10px] uppercase tracking-wide text-sky-600 hover:underline"
+                    @click="showAirtimeNetworkPicker = true"
+                  >
+                    change
+                  </button>
                 </div>
+                <select
+                  v-else
+                  v-model="airtimeForm.network"
+                  class="ui-input mt-1"
+                  @change="onAirtimeManualNetwork"
+                >
+                  <option value="" disabled>Select network</option>
+                  <option value="mtn">MTN</option>
+                  <option value="airtel">Airtel</option>
+                  <option value="glo">Glo</option>
+                  <option value="9mobile">9mobile</option>
+                </select>
               </div>
 
               <label class="block">
@@ -703,6 +741,9 @@ const creditingAirtime = ref(false);
 const airtimeMessage = ref("");
 const airtimeError = ref("");
 
+const showDataNetworkPicker = ref(false);
+const showAirtimeNetworkPicker = ref(false);
+
 const form = reactive({
   pu_code: "",
   state: "Ogun State",
@@ -890,6 +931,15 @@ async function creditData() {
   } finally {
     creditingData.value = false;
   }
+}
+
+function onDataManualNetwork() {
+  showDataNetworkPicker.value = false;
+  onDataNetworkChange();
+}
+
+function onAirtimeManualNetwork() {
+  showAirtimeNetworkPicker.value = false;
 }
 
 async function loadAirtimeQuota() {
