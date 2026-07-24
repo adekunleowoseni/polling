@@ -1,3 +1,11 @@
+function normalizeApiBase(raw: string | undefined): string {
+  const value = (raw ?? "http://localhost:8000").trim().replace(/\/+$/, "");
+  if (!value) return "http://localhost:8000";
+  if (/^https?:\/\//i.test(value)) return value;
+  // Hostnames without a scheme become relative URLs in the browser and break on Vercel.
+  return `https://${value}`;
+}
+
 export default defineNuxtConfig({
   css: ["~/assets/css/main.css"],
   modules: ["@nuxtjs/tailwindcss"],
@@ -15,7 +23,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE ?? "http://localhost:8000",
+      apiBase: normalizeApiBase(process.env.NUXT_PUBLIC_API_BASE),
     },
   },
   compatibilityDate: "2025-01-01",
