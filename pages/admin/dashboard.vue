@@ -24,6 +24,26 @@
       </button>
     </nav>
 
+    <div
+      v-if="showStateScopeFilter"
+      class="flex flex-wrap items-center gap-2 rounded-lg border border-ui-border/40 bg-ui-elevated/30 px-3 py-2"
+    >
+      <p class="text-xs font-medium uppercase tracking-wider text-ui-muted">State scope</p>
+      <button
+        v-for="opt in stateScopeFilters"
+        :key="opt.id"
+        type="button"
+        class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+        :class="stateScopeFilter === opt.id ? 'bg-violet-600 text-white' : 'border border-ui-border/50 text-ui-muted hover:bg-ui-muted/10'"
+        @click="stateScopeFilter = opt.id"
+      >
+        {{ opt.label }}
+      </button>
+      <p class="text-xs text-ui-muted">
+        Filters overview, feeds, pictures, recordings, agents, and vote results.
+      </p>
+    </div>
+
     <p v-if="message" class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300">
       {{ message }}
     </p>
@@ -32,6 +52,36 @@
     </p>
 
     <section v-if="activeTab === 'overview'" class="space-y-4">
+      <div
+        v-if="showStateScopeFilter && stateScopeFilter === 'all' && overviewByState.length"
+        class="grid gap-3 sm:grid-cols-2"
+      >
+        <div
+          v-for="row in overviewByState"
+          :key="row.state"
+          class="ui-card p-5"
+        >
+          <p class="text-xs font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">{{ row.state }}</p>
+          <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <dt class="text-xs text-ui-muted">Live feeds</dt>
+              <dd class="font-semibold text-ui-text">{{ row.live }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-ui-muted">Units</dt>
+              <dd class="font-semibold text-ui-text">{{ row.units }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-ui-muted">Agents</dt>
+              <dd class="font-semibold text-ui-text">{{ row.agents }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-ui-muted">Pictures</dt>
+              <dd class="font-semibold text-ui-text">{{ row.snaps }}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <div
           v-for="stat in overviewStats"
@@ -53,32 +103,38 @@
     <section v-else-if="activeTab === 'feeds'" class="ui-card overflow-hidden">
       <div class="border-b border-ui-border/40 px-5 py-4">
         <h2 class="font-semibold text-ui-text">Polling units & live feeds</h2>
-        <p class="text-xs text-ui-muted">Force offline, correct counts, or remove units.</p>
+        <p class="text-xs text-ui-muted">
+          {{ scopedUnits.length }} unit(s)
+          <span v-if="stateScopeFilter !== 'all'"> · {{ stateScopeFilter }}</span>
+          · Force offline, correct counts, or remove units.
+        </p>
       </div>
 
       <div v-if="loadingUnits" class="p-8 text-center text-sm text-ui-muted">Loading…</div>
+      <div v-else-if="!scopedUnits.length" class="p-8 text-center text-sm text-ui-muted">No polling units in this scope.</div>
 
       <div v-else class="overflow-x-auto">
         <table class="w-full text-left text-sm">
           <thead>
             <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
               <th class="px-4 py-3">Unit</th>
-              <th class="px-4 py-3">Location</th>
+              <th class="px-4 py-3">State</th>
+              <th class="px-4 py-3">Ward</th>
+              <th class="px-4 py-3">LGA</th>
               <th class="px-4 py-3">Status</th>
               <th class="px-4 py-3 text-right">People</th>
               <th class="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-ui-border/30">
-            <tr v-for="unit in units" :key="unit.id">
+            <tr v-for="unit in scopedUnits" :key="unit.id">
               <td class="px-4 py-3">
                 <p class="font-medium text-ui-text">{{ unit.name }}</p>
                 <p class="text-xs text-ui-muted">{{ unit.code }}</p>
               </td>
-              <td class="px-4 py-3 text-ui-muted">
-                <span v-if="unit.state" class="font-medium text-ui-text">{{ unit.state }}</span>
-                <span v-if="unit.state"> · </span>{{ unit.ward }} · {{ unit.lga }}
-              </td>
+              <td class="px-4 py-3 font-medium text-ui-text">{{ unit.state || "—" }}</td>
+              <td class="px-4 py-3 text-ui-muted">{{ unit.ward }}</td>
+              <td class="px-4 py-3 text-ui-muted">{{ unit.lga }}</td>
               <td class="px-4 py-3">
                 <span
                   class="rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -118,7 +174,11 @@
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
         <div>
           <h2 class="font-semibold text-ui-text">Saved feed pictures</h2>
-          <p class="text-xs text-ui-muted">{{ snaps.length }} image(s) · grouped by LGA and ward</p>
+          <p class="text-xs text-ui-muted">
+            {{ scopedSnaps.length }} image(s)
+            <span v-if="stateScopeFilter !== 'all'"> · {{ stateScopeFilter }}</span>
+            · grouped by state, LGA and ward
+          </p>
         </div>
         <button type="button" class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10" @click="loadSnaps">
           Refresh
@@ -126,12 +186,12 @@
       </div>
 
       <div v-if="loadingSnaps" class="p-8 text-center text-sm text-ui-muted">Loading…</div>
-      <div v-else-if="!snaps.length" class="p-8 text-center text-sm text-ui-muted">No saved pictures.</div>
+      <div v-else-if="!scopedSnaps.length" class="p-8 text-center text-sm text-ui-muted">No saved pictures in this scope.</div>
 
       <div v-else class="space-y-8 p-5">
-        <section v-for="lgaGroup in snapsByLga" :key="lgaGroup.lga">
-          <h3 class="text-sm font-semibold text-ui-text">{{ lgaGroup.lga }}</h3>
-          <div v-for="wardGroup in lgaGroup.wards" :key="`${lgaGroup.lga}-${wardGroup.ward}`" class="mt-4">
+        <section v-for="lgaGroup in snapsByLga" :key="`${lgaGroup.state}-${lgaGroup.lga}`">
+          <h3 class="text-sm font-semibold text-ui-text">{{ lgaGroup.label }}</h3>
+          <div v-for="wardGroup in lgaGroup.wards" :key="`${lgaGroup.state}-${lgaGroup.lga}-${wardGroup.ward}`" class="mt-4">
             <p class="mb-2 text-xs font-medium uppercase tracking-wider text-ui-muted">
               {{ wardGroup.ward }} · {{ wardGroup.snaps.length }} picture(s)
             </p>
@@ -144,9 +204,13 @@
                 <img
                   :src="feedSnapImageUrl(apiBase, snap.id)"
                   :alt="snap.polling_unit_name"
-                  :title="snap.polling_unit_name"
+                  :title="`${snap.polling_unit_name} · ${snap.state}`"
                   class="aspect-video w-full object-cover"
                 />
+                <div class="px-2 py-1 text-[10px] text-ui-muted">
+                  <p class="truncate font-medium text-ui-text">{{ snap.polling_unit_name }}</p>
+                  <p class="truncate">{{ snap.state }} · {{ snap.ward }} · {{ snap.lga }}</p>
+                </div>
                 <button
                   type="button"
                   class="w-full py-1 text-[10px] text-red-600 opacity-0 transition group-hover:opacity-100 hover:bg-red-500/10 dark:text-red-400"
@@ -166,7 +230,9 @@
         <div>
           <h2 class="font-semibold text-ui-text">Saved feed recordings</h2>
           <p class="text-xs text-ui-muted">
-            {{ recordings.length }} recording(s) · assembled from live relay frames
+            {{ scopedRecordings.length }} recording(s)
+            <span v-if="stateScopeFilter !== 'all'"> · {{ stateScopeFilter }}</span>
+            · assembled from live relay frames
           </p>
         </div>
         <button type="button" class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10" @click="loadRecordings">
@@ -175,8 +241,8 @@
       </div>
 
       <div v-if="loadingRecordings" class="p-8 text-center text-sm text-ui-muted">Loading…</div>
-      <div v-else-if="!recordings.length" class="p-8 text-center text-sm text-ui-muted">
-        No recordings yet. They are created automatically while an agent is streaming.
+      <div v-else-if="!scopedRecordings.length" class="p-8 text-center text-sm text-ui-muted">
+        No recordings in this scope yet.
       </div>
 
       <div v-else class="overflow-x-auto">
@@ -184,7 +250,9 @@
           <thead>
             <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
               <th class="px-4 py-3">Polling unit</th>
-              <th class="px-4 py-3">Location</th>
+              <th class="px-4 py-3">State</th>
+              <th class="px-4 py-3">Ward</th>
+              <th class="px-4 py-3">LGA</th>
               <th class="px-4 py-3">Started</th>
               <th class="px-4 py-3 text-right">Length</th>
               <th class="px-4 py-3 text-right">Size</th>
@@ -192,12 +260,14 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-ui-border/30">
-            <tr v-for="rec in recordings" :key="rec.id">
+            <tr v-for="rec in scopedRecordings" :key="rec.id">
               <td class="px-4 py-3">
                 <p class="font-medium text-ui-text">{{ rec.polling_unit_name || rec.code }}</p>
                 <p class="text-xs text-ui-muted">{{ rec.code }}</p>
               </td>
-              <td class="px-4 py-3 text-ui-muted">{{ rec.ward }} · {{ rec.lga }}</td>
+              <td class="px-4 py-3 font-medium text-ui-text">{{ rec.state || "—" }}</td>
+              <td class="px-4 py-3 text-ui-muted">{{ rec.ward || "—" }}</td>
+              <td class="px-4 py-3 text-ui-muted">{{ rec.lga || "—" }}</td>
               <td class="px-4 py-3 text-ui-muted">
                 {{ formatWhen(rec.started_at) }}
                 <span
@@ -257,7 +327,10 @@
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
         <div>
           <h2 class="font-semibold text-ui-text">Field agents</h2>
-          <p class="text-xs text-ui-muted">{{ filteredAgents.length }} of {{ agents.length }} agent(s)</p>
+          <p class="text-xs text-ui-muted">
+            {{ filteredAgents.length }} of {{ scopedAgents.length }} agent(s)
+            <span v-if="stateScopeFilter !== 'all'"> · {{ stateScopeFilter }}</span>
+          </p>
         </div>
         <input
           v-model="agentSearch"
@@ -673,22 +746,6 @@
           </button>
         </div>
 
-        <div
-          v-if="showVoteStateFilter"
-          class="mt-4 flex flex-wrap gap-2"
-        >
-          <button
-            v-for="opt in voteStateFilters"
-            :key="opt.id"
-            type="button"
-            class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
-            :class="voteStateFilter === opt.id ? 'bg-violet-600 text-white' : 'border border-ui-border/50 text-ui-muted hover:bg-ui-muted/10'"
-            @click="voteStateFilter = opt.id"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-
         <div v-if="loadingVotes && !voteSummary" class="mt-4 text-sm text-ui-muted">Loading vote results…</div>
         <template v-else-if="filteredVoteSummary">
           <div class="mt-4 rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 text-sm leading-relaxed text-ui-text">
@@ -696,7 +753,7 @@
           </div>
 
           <div
-            v-if="showVoteStateFilter && voteStateFilter === 'all' && filteredVoteSummary.by_state?.length"
+            v-if="showStateScopeFilter && stateScopeFilter === 'all' && filteredVoteSummary.by_state?.length"
             class="mt-4 grid gap-3 sm:grid-cols-2"
           >
             <div
@@ -1108,17 +1165,27 @@ type VoteResultsSummary = {
 const voteSummary = ref<VoteResultsSummary | null>(null);
 const loadingVotes = ref(false);
 const voteDetailTab = ref<"units" | "lgas" | "wards">("units");
-const voteStateFilter = ref<"all" | "Ogun State" | "Osun State">("all");
+const stateScopeFilter = ref<"all" | "Ogun State" | "Osun State">("all");
 
-const showVoteStateFilter = computed(
+const showStateScopeFilter = computed(
   () => (admin.value?.role || "super_admin") === "super_admin",
 );
 
-const voteStateFilters = [
+const stateScopeFilters = [
   { id: "all" as const, label: "All states" },
   { id: "Ogun State" as const, label: "Ogun only" },
   { id: "Osun State" as const, label: "Osun only" },
 ];
+
+function matchesStateScope(state: string | null | undefined) {
+  if (!showStateScopeFilter.value || stateScopeFilter.value === "all") return true;
+  return (state || "").trim() === stateScopeFilter.value;
+}
+
+const scopedUnits = computed(() => units.value.filter((u) => matchesStateScope(u.state)));
+const scopedSnaps = computed(() => snaps.value.filter((s) => matchesStateScope(s.state)));
+const scopedRecordings = computed(() => recordings.value.filter((r) => matchesStateScope(r.state)));
+const scopedAgents = computed(() => agents.value.filter((a) => matchesStateScope(a.state)));
 
 function rebuildVoteSummary(units: VoteUnitStat[]): VoteResultsSummary {
   const total_votes = units.reduce((s, u) => s + u.votes, 0);
@@ -1195,9 +1262,9 @@ function rebuildVoteSummary(units: VoteUnitStat[]): VoteResultsSummary {
     overall_difference,
     overall_note: voteSummary.value?.overall_note || "",
     plain_summary:
-      voteStateFilter.value === "all"
+      stateScopeFilter.value === "all"
         ? voteSummary.value?.plain_summary || ""
-        : `${voteStateFilter.value}: ${total_votes.toLocaleString()} vote(s) from ${units.length} polling unit(s).`,
+        : `${stateScopeFilter.value}: ${total_votes.toLocaleString()} vote(s) from ${units.length} polling unit(s).`,
     by_polling_unit: sortedUnits,
     by_lga,
     by_ward,
@@ -1213,10 +1280,10 @@ function rebuildVoteSummary(units: VoteUnitStat[]): VoteResultsSummary {
 
 const filteredVoteSummary = computed(() => {
   if (!voteSummary.value) return null;
-  if (!showVoteStateFilter.value || voteStateFilter.value === "all") {
+  if (!showStateScopeFilter.value || stateScopeFilter.value === "all") {
     return voteSummary.value;
   }
-  const units = voteSummary.value.by_polling_unit.filter((u) => u.state === voteStateFilter.value);
+  const units = voteSummary.value.by_polling_unit.filter((u) => u.state === stateScopeFilter.value);
   return rebuildVoteSummary(units);
 });
 
@@ -1268,33 +1335,64 @@ function creditStatusClass(status?: string | null) {
   return "bg-amber-500/15 text-amber-600";
 }
 
-const snapsByLga = computed(() => groupSnapsByLgaAndWard(snaps.value));
+const snapsByLga = computed(() => groupSnapsByLgaAndWard(scopedSnaps.value));
 
 const filteredAgents = computed(() => {
   const q = agentSearch.value.trim().toLowerCase();
-  if (!q) return agents.value;
-  return agents.value.filter((a) => {
+  const list = scopedAgents.value;
+  if (!q) return list;
+  return list.filter((a) => {
     const haystack = [a.name, a.email, a.state ?? "", a.lga ?? "", a.ward ?? ""].join(" ").toLowerCase();
     return haystack.includes(q);
   });
 });
 
-const overviewStats = computed(() => [
-  { label: "Live feeds", value: overview.value?.live_feeds ?? "—", hint: null as string | null, clickable: false },
-  { label: "Registered units", value: overview.value?.registered_units ?? "—", hint: null, clickable: false },
-  { label: "People on site", value: overview.value?.total_people_on_site ?? "—", hint: null, clickable: false },
-  {
-    label: "Total votes",
-    value: overview.value?.total_votes?.toLocaleString?.() ?? overview.value?.total_votes ?? "—",
-    hint: overview.value
-      ? `${overview.value.units_with_results} unit(s) reported · click for details`
-      : "Click for details",
-    clickable: true,
-  },
-  { label: "Saved pictures", value: overview.value?.feed_snapshots ?? "—", hint: null, clickable: false },
-  { label: "Agents", value: overview.value?.agents ?? "—", hint: null, clickable: false },
-  { label: "Forms scanned", value: overview.value?.form_registrations ?? "—", hint: null, clickable: false },
-]);
+const overviewByState = computed(() => {
+  if (!showStateScopeFilter.value) return [];
+  const states = ["Ogun State", "Osun State"] as const;
+  return states.map((state) => {
+    const stateUnits = units.value.filter((u) => u.state === state);
+    return {
+      state,
+      live: stateUnits.filter((u) => u.stream_status === "live").length,
+      units: stateUnits.length,
+      agents: agents.value.filter((a) => a.state === state).length,
+      snaps: snaps.value.filter((s) => s.state === state).length,
+    };
+  }).filter((row) => row.units || row.agents || row.snaps || row.live);
+});
+
+const overviewStats = computed(() => {
+  const scoped = stateScopeFilter.value !== "all" && showStateScopeFilter.value;
+  const live = scoped
+    ? scopedUnits.value.filter((u) => u.stream_status === "live").length
+    : overview.value?.live_feeds ?? "—";
+  const registered = scoped ? scopedUnits.value.length : overview.value?.registered_units ?? "—";
+  const people = scoped
+    ? scopedUnits.value.filter((u) => u.stream_status === "live").reduce((s, u) => s + (u.people_count || 0), 0)
+    : overview.value?.total_people_on_site ?? "—";
+  const pictures = scoped ? scopedSnaps.value.length : overview.value?.feed_snapshots ?? "—";
+  const agentCount = scoped ? scopedAgents.value.length : overview.value?.agents ?? "—";
+  const votes = filteredVoteSummary.value?.total_votes ?? overview.value?.total_votes;
+  const unitsReported = filteredVoteSummary.value?.units_with_results ?? overview.value?.units_with_results;
+
+  return [
+    { label: "Live feeds", value: live, hint: scoped ? stateScopeFilter.value : null as string | null, clickable: false },
+    { label: "Registered units", value: registered, hint: scoped ? stateScopeFilter.value : null, clickable: false },
+    { label: "People on site", value: people, hint: scoped ? stateScopeFilter.value : null, clickable: false },
+    {
+      label: "Total votes",
+      value: typeof votes === "number" ? votes.toLocaleString() : votes ?? "—",
+      hint: unitsReported != null
+        ? `${unitsReported} unit(s) reported · click for details`
+        : "Click for details",
+      clickable: true,
+    },
+    { label: "Saved pictures", value: pictures, hint: scoped ? stateScopeFilter.value : null, clickable: false },
+    { label: "Agents", value: agentCount, hint: scoped ? stateScopeFilter.value : null, clickable: false },
+    { label: "Forms scanned", value: overview.value?.form_registrations ?? "—", hint: null, clickable: false },
+  ];
+});
 
 onMounted(async () => {
   if (!requireAdmin()) return;
