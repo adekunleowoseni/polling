@@ -30,11 +30,23 @@
       {{ actionError }}
     </p>
 
-    <section v-if="activeTab === 'overview'" class="grid grid-cols-2 gap-4 lg:grid-cols-3">
-      <div v-for="stat in overviewStats" :key="stat.label" class="ui-card p-5">
-        <p class="text-xs uppercase tracking-wider text-ui-muted">{{ stat.label }}</p>
-        <p class="mt-2 text-2xl font-bold text-ui-text">{{ stat.value }}</p>
+    <section v-if="activeTab === 'overview'" class="space-y-4">
+      <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <div
+          v-for="stat in overviewStats"
+          :key="stat.label"
+          class="ui-card p-5"
+          :class="stat.clickable ? 'cursor-pointer transition hover:border-violet-400/60 hover:bg-violet-500/5' : ''"
+          @click="stat.clickable ? openVoteResults() : undefined"
+        >
+          <p class="text-xs uppercase tracking-wider text-ui-muted">{{ stat.label }}</p>
+          <p class="mt-2 text-2xl font-bold text-ui-text">{{ stat.value }}</p>
+          <p v-if="stat.hint" class="mt-1 text-xs text-ui-muted">{{ stat.hint }}</p>
+        </div>
       </div>
+      <p class="text-xs text-ui-muted">
+        Tip: click the <span class="font-medium text-ui-text">Total votes</span> card to open the full vote breakdown.
+      </p>
     </section>
 
     <section v-else-if="activeTab === 'feeds'" class="ui-card overflow-hidden">
@@ -635,6 +647,201 @@
       </div>
     </section>
 
+    <section v-else-if="activeTab === 'votes'" class="space-y-4">
+      <div class="ui-card p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="font-semibold text-ui-text">Vote results — simple overview</h2>
+            <p class="mt-1 text-sm text-ui-muted">
+              These numbers come from agents typing results at each polling unit. We also compare them with the people counted on site.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10"
+            :disabled="loadingVotes"
+            @click="loadVoteResults"
+          >
+            {{ loadingVotes ? "Loading…" : "Refresh" }}
+          </button>
+        </div>
+
+        <div v-if="loadingVotes && !voteSummary" class="mt-4 text-sm text-ui-muted">Loading vote results…</div>
+        <template v-else-if="voteSummary">
+          <div class="mt-4 rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 text-sm leading-relaxed text-ui-text">
+            {{ voteSummary.plain_summary }}
+          </div>
+
+          <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-lg border border-ui-border/40 p-4">
+              <p class="text-[10px] uppercase tracking-wider text-ui-muted">Total votes</p>
+              <p class="mt-1 text-2xl font-bold text-violet-600 dark:text-violet-400">
+                {{ voteSummary.total_votes.toLocaleString() }}
+              </p>
+            </div>
+            <div class="rounded-lg border border-ui-border/40 p-4">
+              <p class="text-[10px] uppercase tracking-wider text-ui-muted">Units with results</p>
+              <p class="mt-1 text-2xl font-bold text-ui-text">{{ voteSummary.units_with_results.toLocaleString() }}</p>
+            </div>
+            <div class="rounded-lg border border-ui-border/40 p-4">
+              <p class="text-[10px] uppercase tracking-wider text-ui-muted">People counted there</p>
+              <p class="mt-1 text-2xl font-bold text-ui-text">{{ voteSummary.total_people_counted.toLocaleString() }}</p>
+            </div>
+            <div class="rounded-lg border border-ui-border/40 p-4">
+              <p class="text-[10px] uppercase tracking-wider text-ui-muted">Votes vs people</p>
+              <p class="mt-1 text-2xl font-bold text-ui-text">
+                {{ voteSummary.overall_difference > 0 ? "+" : "" }}{{ voteSummary.overall_difference.toLocaleString() }}
+              </p>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-ui-muted">{{ voteSummary.overall_note }}</p>
+
+          <div class="mt-5 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-4">
+              <p class="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Highest votes</p>
+              <p v-if="voteSummary.highest_unit" class="mt-2 text-sm text-ui-text">
+                Polling unit: <strong>{{ voteSummary.highest_unit.name }}</strong>
+                ({{ voteSummary.highest_unit.ward }}, {{ voteSummary.highest_unit.lga }}) —
+                {{ voteSummary.highest_unit.votes.toLocaleString() }} votes
+                vs {{ voteSummary.highest_unit.people_count.toLocaleString() }} people
+              </p>
+              <p v-if="voteSummary.highest_ward" class="mt-1 text-xs text-ui-muted">
+                Highest ward: {{ voteSummary.highest_ward.label }} — {{ voteSummary.highest_ward.votes.toLocaleString() }} votes
+              </p>
+              <p v-if="voteSummary.highest_lga" class="mt-1 text-xs text-ui-muted">
+                Highest LGA: {{ voteSummary.highest_lga.lga }} — {{ voteSummary.highest_lga.votes.toLocaleString() }} votes
+              </p>
+            </div>
+            <div class="rounded-lg border border-amber-500/25 bg-amber-500/5 p-4">
+              <p class="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">Lowest votes</p>
+              <p v-if="voteSummary.lowest_unit" class="mt-2 text-sm text-ui-text">
+                Polling unit: <strong>{{ voteSummary.lowest_unit.name }}</strong>
+                ({{ voteSummary.lowest_unit.ward }}, {{ voteSummary.lowest_unit.lga }}) —
+                {{ voteSummary.lowest_unit.votes.toLocaleString() }} votes
+                vs {{ voteSummary.lowest_unit.people_count.toLocaleString() }} people
+              </p>
+              <p v-if="voteSummary.lowest_ward" class="mt-1 text-xs text-ui-muted">
+                Lowest ward: {{ voteSummary.lowest_ward.label }} — {{ voteSummary.lowest_ward.votes.toLocaleString() }} votes
+              </p>
+              <p v-if="voteSummary.lowest_lga" class="mt-1 text-xs text-ui-muted">
+                Lowest LGA: {{ voteSummary.lowest_lga.lga }} — {{ voteSummary.lowest_lga.votes.toLocaleString() }} votes
+              </p>
+            </div>
+          </div>
+        </template>
+        <p v-else class="mt-4 text-sm text-ui-muted">No vote results yet.</p>
+      </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="flex flex-wrap gap-2 border-b border-ui-border/40 px-5 py-3">
+          <button
+            v-for="opt in [
+              { id: 'units', label: 'By polling unit' },
+              { id: 'lgas', label: 'By local government' },
+              { id: 'wards', label: 'By ward' },
+            ] as const"
+            :key="opt.id"
+            type="button"
+            class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+            :class="voteDetailTab === opt.id ? 'bg-violet-600 text-white' : 'text-ui-muted hover:bg-ui-muted/10'"
+            @click="voteDetailTab = opt.id"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+
+        <div v-if="!voteSummary?.by_polling_unit?.length" class="p-8 text-center text-sm text-ui-muted">
+          Waiting for agents to submit results.
+        </div>
+
+        <div v-else-if="voteDetailTab === 'units'" class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
+                <th class="px-4 py-2">Polling unit</th>
+                <th class="px-4 py-2">Location</th>
+                <th class="px-4 py-2 text-right">Votes</th>
+                <th class="px-4 py-2 text-right">People counted</th>
+                <th class="px-4 py-2 text-right">Difference</th>
+                <th class="px-4 py-2">What this means</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-ui-border/30">
+              <tr v-for="row in voteSummary.by_polling_unit" :key="row.code">
+                <td class="px-4 py-2">
+                  <p class="font-medium text-ui-text">{{ row.name }}</p>
+                  <p class="text-xs text-ui-muted">{{ row.code }}</p>
+                </td>
+                <td class="px-4 py-2 text-ui-muted">{{ row.ward }} · {{ row.lga }}</td>
+                <td class="px-4 py-2 text-right font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</td>
+                <td class="px-4 py-2 text-right text-ui-muted">{{ row.people_count.toLocaleString() }}</td>
+                <td class="px-4 py-2 text-right" :class="row.difference === 0 ? 'text-emerald-600' : 'text-amber-600'">
+                  {{ row.difference > 0 ? "+" : "" }}{{ row.difference.toLocaleString() }}
+                </td>
+                <td class="px-4 py-2 text-xs text-ui-muted max-w-xs">{{ row.comparison_note }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-else-if="voteDetailTab === 'lgas'" class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
+                <th class="px-4 py-2">Local government</th>
+                <th class="px-4 py-2 text-right">Units</th>
+                <th class="px-4 py-2 text-right">Votes</th>
+                <th class="px-4 py-2 text-right">People counted</th>
+                <th class="px-4 py-2 text-right">Difference</th>
+                <th class="px-4 py-2">What this means</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-ui-border/30">
+              <tr v-for="row in voteSummary.by_lga" :key="row.lga">
+                <td class="px-4 py-2 font-medium text-ui-text">{{ row.lga }}</td>
+                <td class="px-4 py-2 text-right text-ui-muted">{{ row.unit_count }}</td>
+                <td class="px-4 py-2 text-right font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</td>
+                <td class="px-4 py-2 text-right text-ui-muted">{{ row.people_count.toLocaleString() }}</td>
+                <td class="px-4 py-2 text-right" :class="row.difference === 0 ? 'text-emerald-600' : 'text-amber-600'">
+                  {{ row.difference > 0 ? "+" : "" }}{{ row.difference.toLocaleString() }}
+                </td>
+                <td class="px-4 py-2 text-xs text-ui-muted max-w-xs">{{ row.comparison_note }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-else class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead>
+              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
+                <th class="px-4 py-2">Ward</th>
+                <th class="px-4 py-2">LGA</th>
+                <th class="px-4 py-2 text-right">Units</th>
+                <th class="px-4 py-2 text-right">Votes</th>
+                <th class="px-4 py-2 text-right">People counted</th>
+                <th class="px-4 py-2 text-right">Difference</th>
+                <th class="px-4 py-2">What this means</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-ui-border/30">
+              <tr v-for="row in voteSummary.by_ward" :key="row.label">
+                <td class="px-4 py-2 font-medium text-ui-text">{{ row.ward }}</td>
+                <td class="px-4 py-2 text-ui-muted">{{ row.lga }}</td>
+                <td class="px-4 py-2 text-right text-ui-muted">{{ row.unit_count }}</td>
+                <td class="px-4 py-2 text-right font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</td>
+                <td class="px-4 py-2 text-right text-ui-muted">{{ row.people_count.toLocaleString() }}</td>
+                <td class="px-4 py-2 text-right" :class="row.difference === 0 ? 'text-emerald-600' : 'text-amber-600'">
+                  {{ row.difference > 0 ? "+" : "" }}{{ row.difference.toLocaleString() }}
+                </td>
+                <td class="px-4 py-2 text-xs text-ui-muted max-w-xs">{{ row.comparison_note }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <AdminAgentManageModal
       :open="agentModalOpen"
       :loading="loadingAgentDetail"
@@ -746,6 +953,7 @@ const tabs = [
   { id: "snaps", label: "Pictures" },
   { id: "recordings", label: "Recordings" },
   { id: "agents", label: "Agents" },
+  { id: "votes", label: "Vote results" },
   { id: "data", label: "Data plans" },
   { id: "airtime", label: "Airtime" },
 ] as const;
@@ -797,6 +1005,48 @@ const airtimeCredits = ref<AirtimeCredit[]>([]);
 const newAirtimeAmount = ref<number | null>(null);
 const loadingAirtime = ref(false);
 const savingAirtime = ref(false);
+
+type VoteUnitStat = {
+  code: string;
+  name: string;
+  lga: string;
+  ward: string;
+  votes: number;
+  people_count: number;
+  difference: number;
+  comparison_note: string;
+};
+type VotePlaceStat = {
+  label: string;
+  lga: string;
+  ward?: string;
+  votes: number;
+  people_count: number;
+  unit_count: number;
+  difference: number;
+  comparison_note: string;
+};
+type VoteResultsSummary = {
+  total_votes: number;
+  units_with_results: number;
+  total_people_counted: number;
+  overall_difference: number;
+  overall_note: string;
+  plain_summary: string;
+  by_polling_unit: VoteUnitStat[];
+  by_lga: VotePlaceStat[];
+  by_ward: VotePlaceStat[];
+  highest_unit: VoteUnitStat | null;
+  lowest_unit: VoteUnitStat | null;
+  highest_lga: VotePlaceStat | null;
+  lowest_lga: VotePlaceStat | null;
+  highest_ward: VotePlaceStat | null;
+  lowest_ward: VotePlaceStat | null;
+};
+
+const voteSummary = ref<VoteResultsSummary | null>(null);
+const loadingVotes = ref(false);
+const voteDetailTab = ref<"units" | "lgas" | "wards">("units");
 
 const appSettings = ref<AppSettings>({
   strict_one_data_claim_per_phone: false,
@@ -858,12 +1108,20 @@ const filteredAgents = computed(() => {
 });
 
 const overviewStats = computed(() => [
-  { label: "Live feeds", value: overview.value?.live_feeds ?? "—" },
-  { label: "Registered units", value: overview.value?.registered_units ?? "—" },
-  { label: "People on site", value: overview.value?.total_people_on_site ?? "—" },
-  { label: "Saved pictures", value: overview.value?.feed_snapshots ?? "—" },
-  { label: "Agents", value: overview.value?.agents ?? "—" },
-  { label: "Forms scanned", value: overview.value?.form_registrations ?? "—" },
+  { label: "Live feeds", value: overview.value?.live_feeds ?? "—", hint: null as string | null, clickable: false },
+  { label: "Registered units", value: overview.value?.registered_units ?? "—", hint: null, clickable: false },
+  { label: "People on site", value: overview.value?.total_people_on_site ?? "—", hint: null, clickable: false },
+  {
+    label: "Total votes",
+    value: overview.value?.total_votes?.toLocaleString?.() ?? overview.value?.total_votes ?? "—",
+    hint: overview.value
+      ? `${overview.value.units_with_results} unit(s) reported · click for details`
+      : "Click for details",
+    clickable: true,
+  },
+  { label: "Saved pictures", value: overview.value?.feed_snapshots ?? "—", hint: null, clickable: false },
+  { label: "Agents", value: overview.value?.agents ?? "—", hint: null, clickable: false },
+  { label: "Forms scanned", value: overview.value?.form_registrations ?? "—", hint: null, clickable: false },
 ]);
 
 onMounted(async () => {
@@ -877,6 +1135,7 @@ watch(activeTab, async (tab) => {
   if (tab === "snaps" && !snaps.value.length) loadSnaps();
   if (tab === "recordings") loadRecordings();
   if (tab === "agents" && !agents.value.length) loadAgents();
+  if (tab === "votes") loadVoteResults();
   if (tab === "data") {
     await loadVtpassStatus();
     await loadVtpassBalance();
@@ -907,6 +1166,26 @@ async function loadOverview() {
     overview.value = await $fetch<AdminOverview>(`${apiBase}/admin/overview`, { headers: authHeaders() });
   } catch {
     actionError.value = "Failed to load overview.";
+  }
+}
+
+async function openVoteResults() {
+  activeTab.value = "votes";
+  await loadVoteResults();
+}
+
+async function loadVoteResults() {
+  loadingVotes.value = true;
+  actionError.value = "";
+  try {
+    voteSummary.value = await $fetch<VoteResultsSummary>(`${apiBase}/admin/results/summary`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    actionError.value = "Failed to load vote results.";
+    voteSummary.value = null;
+  } finally {
+    loadingVotes.value = false;
   }
 }
 
