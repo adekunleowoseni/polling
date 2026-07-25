@@ -13,6 +13,8 @@ export type AdminOverview = {
   feed_snapshots: number;
   agents: number;
   form_registrations: number;
+  total_votes: number;
+  units_with_results: number;
   updated_at: string;
 };
 

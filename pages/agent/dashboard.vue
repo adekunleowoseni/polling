@@ -630,6 +630,92 @@
         </ul>
       </div>
     </section>
+
+    <!-- Vote results -->
+    <section v-else-if="activeTab === 'results'" class="space-y-4">
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-4">
+          <h2 class="font-semibold text-ui-text">Enter polling unit result</h2>
+          <p class="mt-1 text-xs text-ui-muted">
+            Type the vote count for one of your polling units. You can update it later if the figure changes.
+          </p>
+        </div>
+        <form class="space-y-4 p-5" @submit.prevent="saveResult">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block sm:col-span-2">
+              <span class="text-xs text-ui-muted">Polling unit</span>
+              <select v-model="resultForm.code" required class="ui-input mt-1">
+                <option value="" disabled>Select your polling unit</option>
+                <option v-for="unit in units" :key="unit.code" :value="unit.code">
+                  {{ unit.code }} — {{ unit.name }} ({{ unit.ward }}, {{ unit.lga }})
+                </option>
+              </select>
+            </label>
+            <div v-if="selectedResultUnit" class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-3 sm:col-span-2">
+              <p class="text-xs text-ui-muted">People already counted at this unit</p>
+              <p class="mt-1 text-xl font-bold text-ui-text">
+                {{ selectedResultUnit.people_count.toLocaleString() }}
+              </p>
+              <p class="mt-1 text-xs text-ui-muted">
+                Your vote count will be compared with this number on the admin dashboard.
+              </p>
+            </div>
+            <label class="block sm:col-span-2">
+              <span class="text-xs text-ui-muted">Vote count (result)</span>
+              <input
+                v-model.number="resultForm.votes"
+                type="number"
+                min="0"
+                required
+                placeholder="e.g. 250"
+                class="ui-input mt-1"
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            class="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+            :disabled="savingResult || !resultForm.code || resultForm.votes < 0"
+          >
+            {{ savingResult ? "Saving…" : "Save result" }}
+          </button>
+          <p v-if="resultMessage" class="text-sm text-emerald-600 dark:text-emerald-400">{{ resultMessage }}</p>
+          <p v-if="resultError" class="text-sm text-red-500">{{ resultError }}</p>
+        </form>
+      </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-3">
+          <h3 class="text-sm font-semibold text-ui-text">Your submitted results</h3>
+        </div>
+        <div v-if="!myResults.length" class="p-8 text-center text-sm text-ui-muted">
+          No results submitted yet.
+        </div>
+        <ul v-else class="divide-y divide-ui-border/30">
+          <li
+            v-for="row in myResults"
+            :key="row.id"
+            class="flex flex-wrap items-start justify-between gap-3 px-5 py-3"
+          >
+            <div>
+              <p class="text-sm font-medium text-ui-text">{{ row.polling_unit_name }}</p>
+              <p class="text-xs text-ui-muted">{{ row.code }} · {{ row.ward }}, {{ row.lga }}</p>
+              <p class="mt-1 text-xs text-ui-muted">
+                Votes: <span class="font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</span>
+                · People counted: {{ row.people_count.toLocaleString() }}
+              </p>
+              <p class="mt-0.5 text-[10px] text-ui-muted">Updated {{ formatWhen(row.updated_at) }}</p>
+            </div>
+            <span
+              class="rounded-full px-2 py-0.5 text-xs font-semibold"
+              :class="resultCompareClass(row.votes, row.people_count)"
+            >
+              {{ resultCompareLabel(row.votes, row.people_count) }}
+            </span>
+          </li>
+        </ul>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -661,6 +747,7 @@ const tabs = [
   { id: "register", label: "Register" },
   { id: "data", label: "Data credit" },
   { id: "airtime", label: "Airtime" },
+  { id: "results", label: "Results" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -744,6 +831,30 @@ const airtimeError = ref("");
 const showDataNetworkPicker = ref(false);
 const showAirtimeNetworkPicker = ref(false);
 
+type AgentVoteResult = {
+  id: string;
+  code: string;
+  polling_unit_name: string;
+  ward: string;
+  lga: string;
+  votes: number;
+  people_count: number;
+  updated_at: string;
+};
+
+const resultForm = reactive({
+  code: "",
+  votes: 0,
+});
+const myResults = ref<AgentVoteResult[]>([]);
+const savingResult = ref(false);
+const resultMessage = ref("");
+const resultError = ref("");
+
+const selectedResultUnit = computed(
+  () => units.value.find((u) => u.code === resultForm.code) ?? null,
+);
+
 const form = reactive({
   pu_code: "",
   state: "Ogun State",
@@ -798,6 +909,7 @@ const tabsWithBadges = computed(() =>
     if (tab.id === "units") return { ...tab, badge: units.value.length || undefined };
     if (tab.id === "data") return { ...tab, badge: dataCredits.value.length || undefined };
     if (tab.id === "airtime") return { ...tab, badge: airtimeCredits.value.length || undefined };
+    if (tab.id === "results") return { ...tab, badge: myResults.value.length || undefined };
     return { ...tab, badge: undefined as number | undefined };
   }),
 );
@@ -863,8 +975,55 @@ onMounted(async () => {
     loadAirtimeCredits(),
     loadAirtimeQuota(),
     loadAirtimeAmounts(),
+    loadMyResults(),
   ]);
 });
+
+function resultCompareLabel(votes: number, people: number) {
+  const diff = votes - people;
+  if (people <= 0) return "No people count yet";
+  if (diff === 0) return "Matches people";
+  if (diff > 0) return `${diff.toLocaleString()} more than people`;
+  return `${Math.abs(diff).toLocaleString()} fewer than people`;
+}
+
+function resultCompareClass(votes: number, people: number) {
+  const diff = votes - people;
+  if (people <= 0) return "bg-ui-muted/20 text-ui-muted";
+  if (diff === 0) return "bg-emerald-500/15 text-emerald-600";
+  if (Math.abs(diff) / Math.max(people, 1) > 0.25) return "bg-amber-500/15 text-amber-700";
+  return "bg-sky-500/15 text-sky-700";
+}
+
+async function loadMyResults() {
+  try {
+    myResults.value = await $fetch<AgentVoteResult[]>(`${apiBase}/agents/me/results`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    myResults.value = [];
+  }
+}
+
+async function saveResult() {
+  resultMessage.value = "";
+  resultError.value = "";
+  savingResult.value = true;
+  try {
+    const res = await $fetch<AgentVoteResult>(`${apiBase}/agents/me/results`, {
+      method: "PUT",
+      headers: authHeaders(),
+      body: { code: resultForm.code, votes: resultForm.votes },
+    });
+    resultMessage.value = `Saved ${res.votes.toLocaleString()} vote(s) for ${res.polling_unit_name}.`;
+    await loadMyResults();
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    resultError.value = typeof detail === "string" ? detail : "Failed to save result.";
+  } finally {
+    savingResult.value = false;
+  }
+}
 
 async function loadDataQuota() {
   try {
