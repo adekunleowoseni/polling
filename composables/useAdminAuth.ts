@@ -3,6 +3,8 @@ export type Admin = {
   name: string;
   email: string;
   role: string;
+  state?: string | null;
+  allowed_tabs?: string[];
   created_at: string;
 };
 
@@ -76,6 +78,34 @@ export function useAdminAuth() {
     return session;
   }
 
+  async function refreshMe() {
+    if (!token.value) return null;
+    try {
+      const me = await $fetch<Admin>(`${apiBase}/admin/me`, {
+        headers: authHeaders(),
+      });
+      admin.value = me;
+      if (import.meta.client) {
+        localStorage.setItem(ADMIN_KEY, JSON.stringify(me));
+      }
+      return me;
+    } catch {
+      return null;
+    }
+  }
+
+  function canAccessTab(tabId: string) {
+    const allowed = admin.value?.allowed_tabs;
+    if (!allowed || allowed.length === 0) {
+      // Legacy sessions without allowed_tabs: super keeps all, state uses defaults
+      if (admin.value?.role === "state_admin") {
+        return ["overview", "feeds", "snaps", "agents", "votes"].includes(tabId);
+      }
+      return true;
+    }
+    return allowed.includes(tabId);
+  }
+
   function requireAdmin() {
     if (!ready.value) loadFromStorage();
     if (!token.value) {
@@ -95,9 +125,12 @@ export function useAdminAuth() {
     ready,
     authHeaders,
     login,
+    refreshMe,
+    canAccessTab,
     clear,
     requireAdmin,
     isLoggedIn: computed(() => !!token.value),
+    isSuperAdmin: computed(() => (admin.value?.role || "super_admin") === "super_admin"),
     apiBase,
   };
 }

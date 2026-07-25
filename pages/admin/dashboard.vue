@@ -4,7 +4,8 @@
       <div>
         <h1 class="text-xl font-semibold text-ui-text">Admin control panel</h1>
         <p v-if="admin" class="mt-1 text-sm text-ui-muted">
-          {{ admin.name }} · {{ admin.role }}
+          {{ admin.name }} · {{ admin.role === "state_admin" ? "State admin" : "Super admin" }}
+          <span v-if="admin.state"> · {{ admin.state }}</span>
         </p>
       </div>
       <AdminProfileMenu :admin="admin" @logout="logout" />
@@ -12,7 +13,7 @@
 
     <nav class="flex flex-wrap gap-2 border-b border-ui-border/40 pb-3">
       <button
-        v-for="tab in tabs"
+        v-for="tab in visibleTabs"
         :key="tab.id"
         type="button"
         class="rounded-lg px-3 py-1.5 text-sm transition"
@@ -944,10 +945,11 @@ type FeedRecording = {
 definePageMeta({ layout: "default" });
 
 const router = useRouter();
-const { admin, authHeaders, requireAdmin, clear, apiBase } = useAdminAuth();
+const { admin, authHeaders, requireAdmin, clear, apiBase, refreshMe, canAccessTab } =
+  useAdminAuth();
 const { lgas, loadLgas } = useOgunGeo();
 
-const tabs = [
+const ALL_TABS = [
   { id: "overview", label: "Overview" },
   { id: "feeds", label: "Live feeds" },
   { id: "snaps", label: "Pictures" },
@@ -958,7 +960,9 @@ const tabs = [
   { id: "airtime", label: "Airtime" },
 ] as const;
 
-type TabId = (typeof tabs)[number]["id"];
+type TabId = (typeof ALL_TABS)[number]["id"];
+
+const visibleTabs = computed(() => ALL_TABS.filter((tab) => canAccessTab(tab.id)));
 
 const activeTab = ref<TabId>("overview");
 const overview = ref<AdminOverview | null>(null);
@@ -1126,6 +1130,10 @@ const overviewStats = computed(() => [
 
 onMounted(async () => {
   if (!requireAdmin()) return;
+  await refreshMe();
+  if (!canAccessTab(activeTab.value) && visibleTabs.value.length) {
+    activeTab.value = visibleTabs.value[0].id;
+  }
   await loadLgas();
   await Promise.all([loadOverview(), loadUnits(), loadSnaps(), loadAgents()]);
 });
