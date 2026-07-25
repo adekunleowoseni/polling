@@ -20,26 +20,33 @@ export type SnapsByWard = {
 };
 
 export type SnapsByLga = {
+  state: string;
   lga: string;
+  label: string;
   wards: SnapsByWard[];
 };
 
 export function groupSnapsByLgaAndWard(snaps: FeedSnap[]): SnapsByLga[] {
-  const lgaMap = new Map<string, Map<string, FeedSnap[]>>();
+  const lgaMap = new Map<string, { state: string; lga: string; wards: Map<string, FeedSnap[]> }>();
 
   for (const snap of snaps) {
-    const wardMap = lgaMap.get(snap.lga) ?? new Map<string, FeedSnap[]>();
-    const list = wardMap.get(snap.ward) ?? [];
+    const state = (snap.state || "").trim() || "Unknown";
+    const lga = snap.lga || "Unknown";
+    const key = `${state}::${lga}`;
+    const entry = lgaMap.get(key) ?? { state, lga, wards: new Map<string, FeedSnap[]>() };
+    const list = entry.wards.get(snap.ward) ?? [];
     list.push(snap);
-    wardMap.set(snap.ward, list);
-    lgaMap.set(snap.lga, wardMap);
+    entry.wards.set(snap.ward, list);
+    lgaMap.set(key, entry);
   }
 
-  return Array.from(lgaMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([lga, wardMap]) => ({
+  return Array.from(lgaMap.values())
+    .sort((a, b) => a.state.localeCompare(b.state) || a.lga.localeCompare(b.lga))
+    .map(({ state, lga, wards }) => ({
+      state,
       lga,
-      wards: Array.from(wardMap.entries())
+      label: state && state !== "Unknown" ? `${lga} · ${state}` : lga,
+      wards: Array.from(wards.entries())
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([ward, wardSnaps]) => ({
           ward,
