@@ -99,7 +99,7 @@ export function useAdminAuth() {
     if (!allowed || allowed.length === 0) {
       // Legacy sessions without allowed_tabs: super keeps all, state uses defaults
       if (admin.value?.role === "state_admin") {
-        return ["overview", "feeds", "snaps", "agents", "votes"].includes(tabId);
+        return ["overview", "feeds", "snaps", "recordings", "agents", "votes"].includes(tabId);
       }
       return true;
     }
