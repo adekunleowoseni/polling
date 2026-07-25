@@ -75,7 +75,10 @@
                 <p class="font-medium text-ui-text">{{ unit.name }}</p>
                 <p class="text-xs text-ui-muted">{{ unit.code }}</p>
               </td>
-              <td class="px-4 py-3 text-ui-muted">{{ unit.ward }} · {{ unit.lga }}</td>
+              <td class="px-4 py-3 text-ui-muted">
+                <span v-if="unit.state" class="font-medium text-ui-text">{{ unit.state }}</span>
+                <span v-if="unit.state"> · </span>{{ unit.ward }} · {{ unit.lga }}
+              </td>
               <td class="px-4 py-3">
                 <span
                   class="rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -259,7 +262,7 @@
         <input
           v-model="agentSearch"
           type="search"
-          placeholder="Search name, email, LGA, ward…"
+          placeholder="Search name, email, state, LGA, ward…"
           class="ui-input w-full max-w-xs text-sm"
         />
       </div>
@@ -277,8 +280,11 @@
         >
           <p class="truncate font-medium text-ui-text">{{ agent.name }}</p>
           <p class="truncate text-xs text-ui-muted">{{ agent.email }}</p>
-          <p v-if="agent.lga && agent.ward" class="mt-2 truncate text-xs text-emerald-600 dark:text-emerald-400">
-            {{ agent.ward }} · {{ agent.lga }}
+          <p v-if="agent.state || agent.lga" class="mt-2 truncate text-xs text-emerald-600 dark:text-emerald-400">
+            <span v-if="agent.state" class="font-semibold">{{ agent.state }}</span>
+            <span v-if="agent.state && agent.lga"> · </span>
+            <span v-if="agent.lga">{{ agent.lga }}</span>
+            <span v-if="agent.ward"> · {{ agent.ward }}</span>
           </p>
           <p v-else class="mt-2 text-xs text-amber-600 dark:text-amber-400">Unassigned</p>
           <dl class="mt-3 grid grid-cols-3 gap-2 text-xs">
@@ -847,9 +853,9 @@
       :open="agentModalOpen"
       :loading="loadingAgentDetail"
       :agent="selectedAgent"
-      :lgas="lgas"
       :api-base="apiBase"
       :auth-headers="authHeaders"
+      :locked-state="admin?.role === 'state_admin' ? admin.state ?? null : null"
       @close="agentModalOpen = false"
       @updated="onAgentUpdated"
       @deleted="onAgentDeleted"
@@ -871,6 +877,7 @@ type AdminAgentSummary = {
   email: string;
   lga: string | null;
   ward: string | null;
+  state?: string | null;
   created_at: string;
   polling_unit_count: number;
   live_unit_count: number;
@@ -1106,7 +1113,7 @@ const filteredAgents = computed(() => {
   const q = agentSearch.value.trim().toLowerCase();
   if (!q) return agents.value;
   return agents.value.filter((a) => {
-    const haystack = [a.name, a.email, a.lga ?? "", a.ward ?? ""].join(" ").toLowerCase();
+    const haystack = [a.name, a.email, a.state ?? "", a.lga ?? "", a.ward ?? ""].join(" ").toLowerCase();
     return haystack.includes(q);
   });
 });

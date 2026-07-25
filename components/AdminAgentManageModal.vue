@@ -19,10 +19,13 @@
           <div>
             <h2 class="text-lg font-semibold text-ui-text">{{ agent.name }}</h2>
             <p class="text-sm text-ui-muted">{{ agent.email }}</p>
-            <p v-if="agent.lga && agent.ward" class="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              {{ agent.ward }} · {{ agent.lga }}
+            <p v-if="agent.state || agent.lga" class="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <span v-if="agent.state">{{ agent.state }}</span>
+              <span v-if="agent.state && agent.lga"> · </span>
+              <span v-if="agent.lga">{{ agent.lga }}</span>
+              <span v-if="agent.ward"> · {{ agent.ward }}</span>
             </p>
-            <p v-else class="mt-1 text-xs text-amber-600 dark:text-amber-400">No LGA/ward assigned</p>
+            <p v-else class="mt-1 text-xs text-amber-600 dark:text-amber-400">No state / LGA assigned</p>
           </div>
           <button type="button" class="rounded-lg p-2 text-ui-muted hover:bg-ui-muted/10" @click="emit('close')">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -89,11 +92,25 @@
           </section>
 
           <section class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-4">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">LGA / ward assignment</h3>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">State / LGA / ward assignment</h3>
             <div class="mt-3 flex flex-wrap items-end gap-3">
               <label class="min-w-[140px] flex-1">
+                <span class="text-[10px] uppercase text-ui-muted">State</span>
+                <select
+                  v-model="editState"
+                  class="ui-input mt-1 text-sm"
+                  :disabled="!!lockedState"
+                  @change="onStateChange"
+                >
+                  <option value="" disabled>Select state</option>
+                  <option v-for="opt in stateOptions" :key="opt.value" :value="opt.value">
+                    {{ opt.label }}
+                  </option>
+                </select>
+              </label>
+              <label class="min-w-[140px] flex-1">
                 <span class="text-[10px] uppercase text-ui-muted">LGA</span>
-                <select v-model="editLga" class="ui-input mt-1 text-sm" @change="onLgaChange">
+                <select v-model="editLga" class="ui-input mt-1 text-sm" :disabled="!editState" @change="onLgaChange">
                   <option value="" disabled>Select LGA</option>
                   <option v-for="lga in lgas" :key="lga" :value="lga">{{ lga }}</option>
                 </select>
@@ -108,7 +125,7 @@
               <button
                 type="button"
                 class="rounded-lg bg-violet-600 px-4 py-2 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-                :disabled="!editLga || !editWard || saving"
+                :disabled="!editState || !editLga || !editWard || saving"
                 @click="saveAssignment"
               >
                 {{ saving ? "Saving…" : "Save assignment" }}
@@ -170,6 +187,7 @@ export type AdminAgentDetail = {
   email: string;
   lga: string | null;
   ward: string | null;
+  state?: string | null;
   created_at: string;
   data_claim_limit: number;
   data_claims_used: number;
@@ -187,13 +205,19 @@ export type AdminAgentDetail = {
   }[];
 };
 
+const STATE_OPTIONS = [
+  { value: "Ogun State", label: "Ogun State", code: "ogun" },
+  { value: "Osun State", label: "Osun State", code: "osun" },
+] as const;
+
 const props = defineProps<{
   open: boolean;
   loading?: boolean;
   agent: AdminAgentDetail | null;
-  lgas: string[];
   apiBase: string;
   authHeaders: () => Record<string, string>;
+  /** When set (state admin), assignment stays inside that state only. */
+  lockedState?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -202,33 +226,74 @@ const emit = defineEmits<{
   deleted: [id: string];
 }>();
 
+const editState = ref("");
 const editLga = ref("");
 const editWard = ref("");
 const editClaimLimit = ref(1);
 const editAirtimeLimit = ref(1);
+const lgas = ref<string[]>([]);
 const wards = ref<string[]>([]);
 const saving = ref(false);
 const savingClaims = ref(false);
 const savingAirtime = ref(false);
 const deleting = ref(false);
 
+const stateOptions = computed(() => {
+  if (props.lockedState) {
+    return STATE_OPTIONS.filter((s) => s.value === props.lockedState);
+  }
+  return [...STATE_OPTIONS];
+});
+
+function geoCodeForState(stateName: string) {
+  const found = STATE_OPTIONS.find((s) => s.value === stateName);
+  return found?.code ?? "ogun";
+}
+
+async function loadLgasForState(stateName: string) {
+  if (!stateName) {
+    lgas.value = [];
+    return;
+  }
+  const code = geoCodeForState(stateName);
+  lgas.value = await $fetch<string[]>(`${props.apiBase}/geo/states/${code}/lgas`);
+}
+
+async function loadWardsForLga(stateName: string, lga: string) {
+  if (!stateName || !lga) {
+    wards.value = [];
+    return;
+  }
+  const code = geoCodeForState(stateName);
+  wards.value = await $fetch<string[]>(
+    `${props.apiBase}/geo/states/${code}/lgas/${encodeURIComponent(lga)}/wards`,
+  );
+}
+
 watch(
-  () => [props.open, props.agent] as const,
+  () => [props.open, props.agent, props.lockedState] as const,
   async ([isOpen, agent]) => {
     if (!isOpen || !agent) return;
+    editState.value = props.lockedState || agent.state || "";
     editLga.value = agent.lga ?? "";
     editWard.value = agent.ward ?? "";
     editClaimLimit.value = agent.data_claim_limit ?? 1;
     editAirtimeLimit.value = agent.airtime_claim_limit ?? 1;
-    if (editLga.value) {
-      wards.value = await $fetch<string[]>(
-        `${props.apiBase}/geo/states/ogun/lgas/${encodeURIComponent(editLga.value)}/wards`,
-      );
+    await loadLgasForState(editState.value);
+    if (editState.value && editLga.value) {
+      await loadWardsForLga(editState.value, editLga.value);
     } else {
       wards.value = [];
     }
   },
 );
+
+async function onStateChange() {
+  editLga.value = "";
+  editWard.value = "";
+  wards.value = [];
+  await loadLgasForState(editState.value);
+}
 
 async function onLgaChange() {
   editWard.value = "";
@@ -236,9 +301,7 @@ async function onLgaChange() {
     wards.value = [];
     return;
   }
-  wards.value = await $fetch<string[]>(
-    `${props.apiBase}/geo/states/ogun/lgas/${encodeURIComponent(editLga.value)}/wards`,
-  );
+  await loadWardsForLga(editState.value, editLga.value);
 }
 
 async function saveAssignment() {
