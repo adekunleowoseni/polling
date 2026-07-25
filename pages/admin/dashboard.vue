@@ -673,65 +673,104 @@
           </button>
         </div>
 
+        <div
+          v-if="showVoteStateFilter"
+          class="mt-4 flex flex-wrap gap-2"
+        >
+          <button
+            v-for="opt in voteStateFilters"
+            :key="opt.id"
+            type="button"
+            class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
+            :class="voteStateFilter === opt.id ? 'bg-violet-600 text-white' : 'border border-ui-border/50 text-ui-muted hover:bg-ui-muted/10'"
+            @click="voteStateFilter = opt.id"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+
         <div v-if="loadingVotes && !voteSummary" class="mt-4 text-sm text-ui-muted">Loading vote results…</div>
-        <template v-else-if="voteSummary">
+        <template v-else-if="filteredVoteSummary">
           <div class="mt-4 rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 text-sm leading-relaxed text-ui-text">
-            {{ voteSummary.plain_summary }}
+            {{ filteredVoteSummary.plain_summary }}
+          </div>
+
+          <div
+            v-if="showVoteStateFilter && voteStateFilter === 'all' && filteredVoteSummary.by_state?.length"
+            class="mt-4 grid gap-3 sm:grid-cols-2"
+          >
+            <div
+              v-for="st in filteredVoteSummary.by_state"
+              :key="st.state"
+              class="rounded-lg border border-ui-border/40 p-4"
+            >
+              <p class="text-[10px] uppercase tracking-wider text-ui-muted">{{ st.state }}</p>
+              <p class="mt-1 text-2xl font-bold text-violet-600 dark:text-violet-400">
+                {{ st.votes.toLocaleString() }}
+              </p>
+              <p class="mt-1 text-xs text-ui-muted">
+                {{ st.unit_count }} unit(s) · {{ st.people_count.toLocaleString() }} people counted
+              </p>
+            </div>
           </div>
 
           <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-lg border border-ui-border/40 p-4">
               <p class="text-[10px] uppercase tracking-wider text-ui-muted">Total votes</p>
               <p class="mt-1 text-2xl font-bold text-violet-600 dark:text-violet-400">
-                {{ voteSummary.total_votes.toLocaleString() }}
+                {{ filteredVoteSummary.total_votes.toLocaleString() }}
               </p>
             </div>
             <div class="rounded-lg border border-ui-border/40 p-4">
               <p class="text-[10px] uppercase tracking-wider text-ui-muted">Units with results</p>
-              <p class="mt-1 text-2xl font-bold text-ui-text">{{ voteSummary.units_with_results.toLocaleString() }}</p>
+              <p class="mt-1 text-2xl font-bold text-ui-text">{{ filteredVoteSummary.units_with_results.toLocaleString() }}</p>
             </div>
             <div class="rounded-lg border border-ui-border/40 p-4">
               <p class="text-[10px] uppercase tracking-wider text-ui-muted">People counted there</p>
-              <p class="mt-1 text-2xl font-bold text-ui-text">{{ voteSummary.total_people_counted.toLocaleString() }}</p>
+              <p class="mt-1 text-2xl font-bold text-ui-text">{{ filteredVoteSummary.total_people_counted.toLocaleString() }}</p>
             </div>
             <div class="rounded-lg border border-ui-border/40 p-4">
               <p class="text-[10px] uppercase tracking-wider text-ui-muted">Votes vs people</p>
               <p class="mt-1 text-2xl font-bold text-ui-text">
-                {{ voteSummary.overall_difference > 0 ? "+" : "" }}{{ voteSummary.overall_difference.toLocaleString() }}
+                {{ filteredVoteSummary.overall_difference > 0 ? "+" : "" }}{{ filteredVoteSummary.overall_difference.toLocaleString() }}
               </p>
             </div>
           </div>
-          <p class="mt-3 text-xs text-ui-muted">{{ voteSummary.overall_note }}</p>
+          <p class="mt-3 text-xs text-ui-muted">{{ filteredVoteSummary.overall_note }}</p>
 
           <div class="mt-5 grid gap-3 sm:grid-cols-2">
             <div class="rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-4">
               <p class="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Highest votes</p>
-              <p v-if="voteSummary.highest_unit" class="mt-2 text-sm text-ui-text">
-                Polling unit: <strong>{{ voteSummary.highest_unit.name }}</strong>
-                ({{ voteSummary.highest_unit.ward }}, {{ voteSummary.highest_unit.lga }}) —
-                {{ voteSummary.highest_unit.votes.toLocaleString() }} votes
-                vs {{ voteSummary.highest_unit.people_count.toLocaleString() }} people
+              <p v-if="filteredVoteSummary.highest_unit" class="mt-2 text-sm text-ui-text">
+                Polling unit: <strong>{{ filteredVoteSummary.highest_unit.name }}</strong>
+                ({{ filteredVoteSummary.highest_unit.state }}, {{ filteredVoteSummary.highest_unit.ward }}, {{ filteredVoteSummary.highest_unit.lga }}) —
+                {{ filteredVoteSummary.highest_unit.votes.toLocaleString() }} votes
+                vs {{ filteredVoteSummary.highest_unit.people_count.toLocaleString() }} people
               </p>
-              <p v-if="voteSummary.highest_ward" class="mt-1 text-xs text-ui-muted">
-                Highest ward: {{ voteSummary.highest_ward.label }} — {{ voteSummary.highest_ward.votes.toLocaleString() }} votes
+              <p v-if="filteredVoteSummary.highest_ward" class="mt-1 text-xs text-ui-muted">
+                Highest ward: {{ filteredVoteSummary.highest_ward.label }} — {{ filteredVoteSummary.highest_ward.votes.toLocaleString() }} votes
               </p>
-              <p v-if="voteSummary.highest_lga" class="mt-1 text-xs text-ui-muted">
-                Highest LGA: {{ voteSummary.highest_lga.lga }} — {{ voteSummary.highest_lga.votes.toLocaleString() }} votes
+              <p v-if="filteredVoteSummary.highest_lga" class="mt-1 text-xs text-ui-muted">
+                Highest LGA: {{ filteredVoteSummary.highest_lga.lga }}
+                <span v-if="filteredVoteSummary.highest_lga.state">({{ filteredVoteSummary.highest_lga.state }})</span>
+                — {{ filteredVoteSummary.highest_lga.votes.toLocaleString() }} votes
               </p>
             </div>
             <div class="rounded-lg border border-amber-500/25 bg-amber-500/5 p-4">
               <p class="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">Lowest votes</p>
-              <p v-if="voteSummary.lowest_unit" class="mt-2 text-sm text-ui-text">
-                Polling unit: <strong>{{ voteSummary.lowest_unit.name }}</strong>
-                ({{ voteSummary.lowest_unit.ward }}, {{ voteSummary.lowest_unit.lga }}) —
-                {{ voteSummary.lowest_unit.votes.toLocaleString() }} votes
-                vs {{ voteSummary.lowest_unit.people_count.toLocaleString() }} people
+              <p v-if="filteredVoteSummary.lowest_unit" class="mt-2 text-sm text-ui-text">
+                Polling unit: <strong>{{ filteredVoteSummary.lowest_unit.name }}</strong>
+                ({{ filteredVoteSummary.lowest_unit.state }}, {{ filteredVoteSummary.lowest_unit.ward }}, {{ filteredVoteSummary.lowest_unit.lga }}) —
+                {{ filteredVoteSummary.lowest_unit.votes.toLocaleString() }} votes
+                vs {{ filteredVoteSummary.lowest_unit.people_count.toLocaleString() }} people
               </p>
-              <p v-if="voteSummary.lowest_ward" class="mt-1 text-xs text-ui-muted">
-                Lowest ward: {{ voteSummary.lowest_ward.label }} — {{ voteSummary.lowest_ward.votes.toLocaleString() }} votes
+              <p v-if="filteredVoteSummary.lowest_ward" class="mt-1 text-xs text-ui-muted">
+                Lowest ward: {{ filteredVoteSummary.lowest_ward.label }} — {{ filteredVoteSummary.lowest_ward.votes.toLocaleString() }} votes
               </p>
-              <p v-if="voteSummary.lowest_lga" class="mt-1 text-xs text-ui-muted">
-                Lowest LGA: {{ voteSummary.lowest_lga.lga }} — {{ voteSummary.lowest_lga.votes.toLocaleString() }} votes
+              <p v-if="filteredVoteSummary.lowest_lga" class="mt-1 text-xs text-ui-muted">
+                Lowest LGA: {{ filteredVoteSummary.lowest_lga.lga }}
+                <span v-if="filteredVoteSummary.lowest_lga.state">({{ filteredVoteSummary.lowest_lga.state }})</span>
+                — {{ filteredVoteSummary.lowest_lga.votes.toLocaleString() }} votes
               </p>
             </div>
           </div>
@@ -757,7 +796,7 @@
           </button>
         </div>
 
-        <div v-if="!voteSummary?.by_polling_unit?.length" class="p-8 text-center text-sm text-ui-muted">
+        <div v-if="!filteredVoteSummary?.by_polling_unit?.length" class="p-8 text-center text-sm text-ui-muted">
           Waiting for agents to submit results.
         </div>
 
@@ -766,7 +805,9 @@
             <thead>
               <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
                 <th class="px-4 py-2">Polling unit</th>
-                <th class="px-4 py-2">Location</th>
+                <th class="px-4 py-2">State</th>
+                <th class="px-4 py-2">Ward</th>
+                <th class="px-4 py-2">LGA</th>
                 <th class="px-4 py-2 text-right">Votes</th>
                 <th class="px-4 py-2 text-right">People counted</th>
                 <th class="px-4 py-2 text-right">Difference</th>
@@ -774,12 +815,14 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-ui-border/30">
-              <tr v-for="row in voteSummary.by_polling_unit" :key="row.code">
+              <tr v-for="row in filteredVoteSummary.by_polling_unit" :key="`${row.state}-${row.code}`">
                 <td class="px-4 py-2">
                   <p class="font-medium text-ui-text">{{ row.name }}</p>
                   <p class="text-xs text-ui-muted">{{ row.code }}</p>
                 </td>
-                <td class="px-4 py-2 text-ui-muted">{{ row.ward }} · {{ row.lga }}</td>
+                <td class="px-4 py-2 font-medium text-ui-text">{{ row.state || "—" }}</td>
+                <td class="px-4 py-2 text-ui-muted">{{ row.ward || "—" }}</td>
+                <td class="px-4 py-2 text-ui-muted">{{ row.lga || "—" }}</td>
                 <td class="px-4 py-2 text-right font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</td>
                 <td class="px-4 py-2 text-right text-ui-muted">{{ row.people_count.toLocaleString() }}</td>
                 <td class="px-4 py-2 text-right" :class="row.difference === 0 ? 'text-emerald-600' : 'text-amber-600'">
@@ -795,6 +838,7 @@
           <table class="w-full text-left text-sm">
             <thead>
               <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
+                <th class="px-4 py-2">State</th>
                 <th class="px-4 py-2">Local government</th>
                 <th class="px-4 py-2 text-right">Units</th>
                 <th class="px-4 py-2 text-right">Votes</th>
@@ -804,7 +848,8 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-ui-border/30">
-              <tr v-for="row in voteSummary.by_lga" :key="row.lga">
+              <tr v-for="row in filteredVoteSummary.by_lga" :key="`${row.state}-${row.lga}`">
+                <td class="px-4 py-2 font-medium text-ui-text">{{ row.state || "—" }}</td>
                 <td class="px-4 py-2 font-medium text-ui-text">{{ row.lga }}</td>
                 <td class="px-4 py-2 text-right text-ui-muted">{{ row.unit_count }}</td>
                 <td class="px-4 py-2 text-right font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</td>
@@ -822,6 +867,7 @@
           <table class="w-full text-left text-sm">
             <thead>
               <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
+                <th class="px-4 py-2">State</th>
                 <th class="px-4 py-2">Ward</th>
                 <th class="px-4 py-2">LGA</th>
                 <th class="px-4 py-2 text-right">Units</th>
@@ -832,7 +878,8 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-ui-border/30">
-              <tr v-for="row in voteSummary.by_ward" :key="row.label">
+              <tr v-for="row in filteredVoteSummary.by_ward" :key="`${row.state}-${row.label}`">
+                <td class="px-4 py-2 font-medium text-ui-text">{{ row.state || "—" }}</td>
                 <td class="px-4 py-2 font-medium text-ui-text">{{ row.ward }}</td>
                 <td class="px-4 py-2 text-ui-muted">{{ row.lga }}</td>
                 <td class="px-4 py-2 text-right text-ui-muted">{{ row.unit_count }}</td>
@@ -1022,6 +1069,7 @@ type VoteUnitStat = {
   name: string;
   lga: string;
   ward: string;
+  state?: string;
   votes: number;
   people_count: number;
   difference: number;
@@ -1029,6 +1077,7 @@ type VoteUnitStat = {
 };
 type VotePlaceStat = {
   label: string;
+  state?: string;
   lga: string;
   ward?: string;
   votes: number;
@@ -1047,6 +1096,7 @@ type VoteResultsSummary = {
   by_polling_unit: VoteUnitStat[];
   by_lga: VotePlaceStat[];
   by_ward: VotePlaceStat[];
+  by_state?: VotePlaceStat[];
   highest_unit: VoteUnitStat | null;
   lowest_unit: VoteUnitStat | null;
   highest_lga: VotePlaceStat | null;
@@ -1058,6 +1108,117 @@ type VoteResultsSummary = {
 const voteSummary = ref<VoteResultsSummary | null>(null);
 const loadingVotes = ref(false);
 const voteDetailTab = ref<"units" | "lgas" | "wards">("units");
+const voteStateFilter = ref<"all" | "Ogun State" | "Osun State">("all");
+
+const showVoteStateFilter = computed(
+  () => (admin.value?.role || "super_admin") === "super_admin",
+);
+
+const voteStateFilters = [
+  { id: "all" as const, label: "All states" },
+  { id: "Ogun State" as const, label: "Ogun only" },
+  { id: "Osun State" as const, label: "Osun only" },
+];
+
+function rebuildVoteSummary(units: VoteUnitStat[]): VoteResultsSummary {
+  const total_votes = units.reduce((s, u) => s + u.votes, 0);
+  const total_people = units.reduce((s, u) => s + u.people_count, 0);
+  const overall_difference = total_votes - total_people;
+  const by_lga_map = new Map<string, VotePlaceStat>();
+  const by_ward_map = new Map<string, VotePlaceStat>();
+  const by_state_map = new Map<string, VotePlaceStat>();
+
+  for (const u of units) {
+    const state = u.state || "Unknown";
+    const lgaKey = `${state}::${u.lga}`;
+    const wardKey = `${state}::${u.lga}::${u.ward}`;
+
+    const st = by_state_map.get(state) || {
+      label: state,
+      state,
+      lga: "",
+      votes: 0,
+      people_count: 0,
+      unit_count: 0,
+      difference: 0,
+      comparison_note: "",
+    };
+    st.votes += u.votes;
+    st.people_count += u.people_count;
+    st.unit_count += 1;
+    st.difference = st.votes - st.people_count;
+    by_state_map.set(state, st);
+
+    const lg = by_lga_map.get(lgaKey) || {
+      label: `${u.lga} (${state})`,
+      state,
+      lga: u.lga,
+      votes: 0,
+      people_count: 0,
+      unit_count: 0,
+      difference: 0,
+      comparison_note: "",
+    };
+    lg.votes += u.votes;
+    lg.people_count += u.people_count;
+    lg.unit_count += 1;
+    lg.difference = lg.votes - lg.people_count;
+    by_lga_map.set(lgaKey, lg);
+
+    const wd = by_ward_map.get(wardKey) || {
+      label: `${u.ward}, ${u.lga} (${state})`,
+      state,
+      lga: u.lga,
+      ward: u.ward,
+      votes: 0,
+      people_count: 0,
+      unit_count: 0,
+      difference: 0,
+      comparison_note: "",
+    };
+    wd.votes += u.votes;
+    wd.people_count += u.people_count;
+    wd.unit_count += 1;
+    wd.difference = wd.votes - wd.people_count;
+    by_ward_map.set(wardKey, wd);
+  }
+
+  const by_lga = [...by_lga_map.values()].sort((a, b) => (a.state || "").localeCompare(b.state || "") || b.votes - a.votes);
+  const by_ward = [...by_ward_map.values()].sort((a, b) => (a.state || "").localeCompare(b.state || "") || b.votes - a.votes);
+  const by_state = [...by_state_map.values()].sort((a, b) => b.votes - a.votes);
+  const sortedUnits = [...units].sort((a, b) => (a.state || "").localeCompare(b.state || "") || b.votes - a.votes);
+
+  return {
+    total_votes,
+    units_with_results: units.length,
+    total_people_counted: total_people,
+    overall_difference,
+    overall_note: voteSummary.value?.overall_note || "",
+    plain_summary:
+      voteStateFilter.value === "all"
+        ? voteSummary.value?.plain_summary || ""
+        : `${voteStateFilter.value}: ${total_votes.toLocaleString()} vote(s) from ${units.length} polling unit(s).`,
+    by_polling_unit: sortedUnits,
+    by_lga,
+    by_ward,
+    by_state,
+    highest_unit: sortedUnits.length ? sortedUnits.reduce((a, b) => (a.votes >= b.votes ? a : b)) : null,
+    lowest_unit: sortedUnits.length ? sortedUnits.reduce((a, b) => (a.votes <= b.votes ? a : b)) : null,
+    highest_lga: by_lga.length ? by_lga.reduce((a, b) => (a.votes >= b.votes ? a : b)) : null,
+    lowest_lga: by_lga.length ? by_lga.reduce((a, b) => (a.votes <= b.votes ? a : b)) : null,
+    highest_ward: by_ward.length ? by_ward.reduce((a, b) => (a.votes >= b.votes ? a : b)) : null,
+    lowest_ward: by_ward.length ? by_ward.reduce((a, b) => (a.votes <= b.votes ? a : b)) : null,
+  };
+}
+
+const filteredVoteSummary = computed(() => {
+  if (!voteSummary.value) return null;
+  if (!showVoteStateFilter.value || voteStateFilter.value === "all") {
+    return voteSummary.value;
+  }
+  const units = voteSummary.value.by_polling_unit.filter((u) => u.state === voteStateFilter.value);
+  return rebuildVoteSummary(units);
+});
 
 const appSettings = ref<AppSettings>({
   strict_one_data_claim_per_phone: false,
