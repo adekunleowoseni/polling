@@ -1001,6 +1001,44 @@
         </div>
       </div>
 
+      <div v-if="flaggedUnits.length" class="ui-card overflow-hidden border-red-500/30">
+        <div class="border-b border-ui-border/40 px-5 py-4">
+          <h2 class="font-semibold text-ui-text">Flagged for review ({{ flaggedUnits.length }})</h2>
+          <p class="mt-1 text-xs text-ui-muted">
+            Polling units with an open discrepancy — over-voting, a figure mismatch, or a missing
+            IReV upload. Prioritized worklist for tribunal preparation.
+          </p>
+        </div>
+        <ul class="divide-y divide-ui-border/30">
+          <li
+            v-for="unit in flaggedUnits"
+            :key="unit.code"
+            class="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+          >
+            <div>
+              <p class="text-sm font-medium text-ui-text">{{ unit.polling_unit_name }}</p>
+              <p class="text-xs text-ui-muted">{{ unit.code }} · {{ unit.state }} · {{ unit.ward }}, {{ unit.lga }}</p>
+              <p class="mt-1 flex flex-wrap gap-1">
+                <span
+                  v-for="flag in unit.flags"
+                  :key="flag"
+                  class="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-600"
+                >
+                  {{ flag.replace("_", " ") }}
+                </span>
+              </p>
+            </div>
+            <NuxtLink
+              :to="`/admin/polling-units/${unit.code}/tribunal-report`"
+              target="_blank"
+              class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500"
+            >
+              Open report
+            </NuxtLink>
+          </li>
+        </ul>
+      </div>
+
       <div class="ui-card overflow-hidden">
         <div class="flex flex-wrap items-start justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
           <div>
@@ -1084,6 +1122,13 @@
                   class="rounded-lg border border-ui-border/40 px-3 py-1.5 text-xs text-ui-text hover:bg-ui-elevated/40"
                 >
                   Certificate
+                </NuxtLink>
+                <NuxtLink
+                  :to="`/admin/polling-units/${row.code}/tribunal-report`"
+                  target="_blank"
+                  class="rounded-lg border border-ui-border/40 px-3 py-1.5 text-xs text-ui-text hover:bg-ui-elevated/40"
+                >
+                  Tribunal report
                 </NuxtLink>
               </div>
               <form class="flex items-center gap-1.5" @submit.prevent="saveOfficialFigure(row)">
@@ -1465,6 +1510,18 @@ type AdminResultSheet = {
 const resultSheets = ref<AdminResultSheet[]>([]);
 const loadingResultSheets = ref(false);
 const resultSheetsError = ref("");
+
+type FlaggedUnit = {
+  code: string;
+  polling_unit_name: string;
+  state: string;
+  ward: string;
+  lga: string;
+  flags: string[];
+  severity: number;
+};
+
+const flaggedUnits = ref<FlaggedUnit[]>([]);
 const officialFigureDrafts = reactive<Record<string, number | null>>({});
 const savingOfficialFigure = ref<string | null>(null);
 const stateScopeFilter = ref<"all" | "Ogun State" | "Osun State">("all");
@@ -1744,6 +1801,7 @@ watch(activeTab, async (tab) => {
   if (tab === "votes") {
     loadVoteResults();
     loadResultSheets();
+    loadFlaggedUnits();
     if (admin.value?.role === "super_admin") {
       loadAppSettings();
       loadIrevStatus();
@@ -1784,7 +1842,7 @@ async function loadOverview() {
 
 async function openVoteResults() {
   activeTab.value = "votes";
-  const tasks = [loadVoteResults(), loadResultSheets()];
+  const tasks = [loadVoteResults(), loadResultSheets(), loadFlaggedUnits()];
   if (admin.value?.role === "super_admin") {
     tasks.push(loadAppSettings(), loadIrevStatus());
   }
@@ -1823,6 +1881,16 @@ async function loadResultSheets() {
     resultSheets.value = [];
   } finally {
     loadingResultSheets.value = false;
+  }
+}
+
+async function loadFlaggedUnits() {
+  try {
+    flaggedUnits.value = await $fetch<FlaggedUnit[]>(`${apiBase}/admin/tribunal-reports/flagged`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    flaggedUnits.value = [];
   }
 }
 
