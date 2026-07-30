@@ -1053,6 +1053,99 @@
         </ul>
         <p v-if="resultSheetsError" class="px-5 pb-4 text-sm text-red-500">{{ resultSheetsError }}</p>
       </div>
+
+      <div v-if="admin?.role === 'super_admin'" class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-4">
+          <h2 class="font-semibold text-ui-text">IReV watchdog (super admin)</h2>
+          <p class="mt-1 text-xs text-ui-muted">
+            Points at INEC's IReV API for the current election. The host and election ID are only
+            valid while IReV is live for that election — capture them from your browser's
+            devtools network tab during that window. Left off, result sheets fall back to the
+            manual official-figure entry above.
+          </p>
+        </div>
+        <div class="space-y-4 p-5">
+          <div class="flex items-center justify-between rounded-lg border border-ui-border/40 p-3">
+            <div>
+              <p class="text-sm font-medium text-ui-text">Watchdog enabled</p>
+              <p class="text-xs text-ui-muted">
+                {{ irevConfigDraft.irev_enabled ? "Polling IReV automatically" : "Off — manual entry only" }}
+              </p>
+            </div>
+            <input v-model="irevConfigDraft.irev_enabled" type="checkbox" class="h-5 w-5" />
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block sm:col-span-2">
+              <span class="text-xs text-ui-muted">IReV API base URL</span>
+              <input
+                v-model.trim="irevConfigDraft.irev_api_base"
+                type="text"
+                placeholder="https://xxxx.inecelectionresults.ng/api/v1"
+                class="ui-input mt-1"
+              />
+            </label>
+            <label class="block">
+              <span class="text-xs text-ui-muted">Election ID</span>
+              <input v-model.trim="irevConfigDraft.irev_election_id" type="text" class="ui-input mt-1" />
+            </label>
+            <label class="block">
+              <span class="text-xs text-ui-muted">Poll interval (seconds)</span>
+              <input
+                v-model.number="irevConfigDraft.irev_poll_interval_seconds"
+                type="number"
+                min="60"
+                max="3600"
+                class="ui-input mt-1"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            class="rounded-lg bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-500 disabled:opacity-50"
+            :disabled="savingIrevConfig"
+            @click="saveIrevConfig"
+          >
+            {{ savingIrevConfig ? "Saving…" : "Save watchdog config" }}
+          </button>
+
+          <div
+            v-if="irevStatus"
+            class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-3 text-xs text-ui-muted"
+          >
+            <p>Configured: {{ irevStatus.configured ? "Yes" : "No" }} · Enabled: {{ irevStatus.enabled ? "Yes" : "No" }}</p>
+            <p class="mt-1">
+              Mapped polling units: {{ irevStatus.mapped_polling_units.toLocaleString() }}
+              · Auto-filled results: {{ irevStatus.auto_filled_result_sheets.toLocaleString() }}
+            </p>
+          </div>
+
+          <div class="border-t border-ui-border/40 pt-4">
+            <p class="text-sm font-medium text-ui-text">One-time: match our polling units to IReV</p>
+            <p class="mt-1 text-xs text-ui-muted">
+              Enter IReV's internal state ID (found in devtools while browsing IReV live), then
+              run the match. Safe to re-run any time.
+            </p>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                v-model.trim="irevSyncStateId"
+                type="text"
+                placeholder="IReV state_irev_id"
+                class="ui-input w-48"
+              />
+              <button
+                type="button"
+                class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10 disabled:opacity-50"
+                :disabled="syncingIrev || !irevSyncStateId"
+                @click="runIrevSync"
+              >
+                {{ syncingIrev ? "Matching…" : "Run mapping sync" }}
+              </button>
+            </div>
+            <p v-if="irevSyncResult" class="mt-2 text-xs text-emerald-600">{{ irevSyncResult }}</p>
+            <p v-if="irevSyncError" class="mt-2 text-xs text-red-500">{{ irevSyncError }}</p>
+          </div>
+        </div>
+      </div>
     </section>
 
     <AdminAgentManageModal
@@ -2014,8 +2107,66 @@ async function loadAppSettings() {
     appSettings.value = await $fetch<AppSettings>(`${apiBase}/admin/settings`, {
       headers: authHeaders(),
     });
+    irevConfigDraft.irev_enabled = appSettings.value.irev_enabled;
+    irevConfigDraft.irev_api_base = appSettings.value.irev_api_base;
+    irevConfigDraft.irev_election_id = appSettings.value.irev_election_id;
+    irevConfigDraft.irev_poll_interval_seconds = appSettings.value.irev_poll_interval_seconds;
   } catch {
     // keep defaults
+  }
+}
+
+async function saveIrevConfig() {
+  savingIrevConfig.value = true;
+  irevSyncError.value = "";
+  try {
+    await saveAppSettings({
+      irev_enabled: irevConfigDraft.irev_enabled,
+      irev_api_base: irevConfigDraft.irev_api_base,
+      irev_election_id: irevConfigDraft.irev_election_id,
+      irev_poll_interval_seconds: irevConfigDraft.irev_poll_interval_seconds,
+    });
+    await loadIrevStatus();
+  } finally {
+    savingIrevConfig.value = false;
+  }
+}
+
+async function loadIrevStatus() {
+  try {
+    irevStatus.value = await $fetch<IrevStatus>(`${apiBase}/admin/irev/status`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    irevStatus.value = null;
+  }
+}
+
+async function runIrevSync() {
+  if (!irevSyncStateId.value) return;
+  syncingIrev.value = true;
+  irevSyncResult.value = "";
+  irevSyncError.value = "";
+  try {
+    const res = await $fetch<{ matched: number; skipped: number; error?: string }>(
+      `${apiBase}/admin/irev/sync-mapping`,
+      {
+        method: "POST",
+        headers: authHeaders(),
+        body: { state_irev_id: irevSyncStateId.value },
+      },
+    );
+    if (res.error) {
+      irevSyncError.value = res.error;
+    } else {
+      irevSyncResult.value = `Matched ${res.matched.toLocaleString()} polling unit(s), skipped ${res.skipped.toLocaleString()}.`;
+    }
+    await loadIrevStatus();
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    irevSyncError.value = typeof detail === "string" ? detail : "Failed to run the mapping sync.";
+  } finally {
+    syncingIrev.value = false;
   }
 }
 
