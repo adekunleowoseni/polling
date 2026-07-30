@@ -26,6 +26,14 @@ body {
   @apply bg-ui-bg text-ui-text antialiased;
 }
 
+@media print {
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+}
+
 @layer components {
   .ui-card {
     @apply rounded-2xl border border-ui-border/60 bg-ui-surface/90 shadow-sm dark:border-ui-border/40 dark:bg-ui-surface/80;

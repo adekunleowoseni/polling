@@ -325,6 +325,71 @@
       </div>
     </section>
 
+    <!-- Accreditation -->
+    <section v-else-if="activeTab === 'accreditation'" class="space-y-4">
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-4">
+          <h2 class="font-semibold text-ui-text">Party accreditation</h2>
+          <p class="mt-1 text-xs text-ui-muted">
+            Upload your INEC/party accreditation document (appointment letter as a polling
+            agent). An admin must approve this before you can submit result sheets — an
+            unaccredited monitor is a weaker witness if this ever goes to a tribunal.
+          </p>
+        </div>
+        <div class="p-5">
+          <div class="mb-4 flex items-center gap-2">
+            <span class="text-xs text-ui-muted">Status:</span>
+            <span
+              class="rounded-full px-2 py-0.5 text-xs font-semibold"
+              :class="accreditationStatusClass(accreditation.accreditation_status)"
+            >
+              {{ accreditationStatusLabel(accreditation.accreditation_status) }}
+            </span>
+          </div>
+          <p v-if="accreditation.accreditation_status === 'rejected' && accreditation.rejection_reason" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-600">
+            Rejected: {{ accreditation.rejection_reason }}
+          </p>
+
+          <form class="space-y-4" @submit.prevent="submitAccreditation">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block">
+                <span class="text-xs text-ui-muted">Accreditation number (optional)</span>
+                <input v-model.trim="accreditationForm.accreditation_number" type="text" class="ui-input mt-1" />
+              </label>
+              <label class="block">
+                <span class="text-xs text-ui-muted">Party</span>
+                <input v-model.trim="accreditationForm.party_name" type="text" placeholder="e.g. PDP" class="ui-input mt-1" />
+              </label>
+              <label class="flex items-center gap-2 sm:col-span-2">
+                <input v-model="accreditationForm.is_ec8a_signatory" type="checkbox" class="h-4 w-4" />
+                <span class="text-xs text-ui-text">I am one of the signatories on the physical EC8A form for my unit</span>
+              </label>
+              <label class="block sm:col-span-2">
+                <span class="text-xs text-ui-muted">Accreditation document (photo or PDF)</span>
+                <input
+                  ref="accreditationFileInput"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  required
+                  class="mt-1 block w-full text-sm text-ui-muted"
+                  @change="onSelectAccreditationDoc"
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              class="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+              :disabled="savingAccreditation || !accreditationDoc"
+            >
+              {{ savingAccreditation ? "Uploading…" : "Submit for approval" }}
+            </button>
+            <p v-if="accreditationMessage" class="text-sm text-emerald-600 dark:text-emerald-400">{{ accreditationMessage }}</p>
+            <p v-if="accreditationError" class="text-sm text-red-500">{{ accreditationError }}</p>
+          </form>
+        </div>
+      </div>
+    </section>
+
     <!-- Data credit -->
     <section v-else-if="activeTab === 'data'" class="space-y-4">
       <div class="grid gap-4 sm:grid-cols-3">
@@ -716,6 +781,15 @@
         </ul>
       </div>
 
+      <div
+        v-if="accreditation.accreditation_status !== 'approved'"
+        class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-400"
+      >
+        You must submit and get your
+        <button type="button" class="underline" @click="activeTab = 'accreditation'">party accreditation</button>
+        approved before you can submit result sheets.
+      </div>
+
       <div class="ui-card overflow-hidden">
         <div class="border-b border-ui-border/40 px-5 py-4">
           <h2 class="font-semibold text-ui-text">Submit EC8A result sheet (recommended)</h2>
@@ -874,6 +948,7 @@ const {
 const tabs = [
   { id: "units", label: "My units" },
   { id: "register", label: "Register" },
+  { id: "accreditation", label: "Accreditation" },
   { id: "data", label: "Data credit" },
   { id: "airtime", label: "Airtime" },
   { id: "results", label: "Results" },
@@ -1015,6 +1090,38 @@ const savingResultSheet = ref(false);
 const resultSheetMessage = ref("");
 const resultSheetError = ref("");
 const myResultSheets = ref<AgentResultSheet[]>([]);
+
+type Accreditation = {
+  accreditation_status: string;
+  accreditation_number: string | null;
+  party_name: string | null;
+  is_ec8a_signatory: boolean | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  has_document: boolean;
+};
+
+const accreditation = ref<Accreditation>({
+  accreditation_status: "none",
+  accreditation_number: null,
+  party_name: null,
+  is_ec8a_signatory: null,
+  submitted_at: null,
+  reviewed_at: null,
+  rejection_reason: null,
+  has_document: false,
+});
+const accreditationForm = reactive({
+  accreditation_number: "",
+  party_name: "",
+  is_ec8a_signatory: false,
+});
+const accreditationDoc = ref<File | null>(null);
+const accreditationFileInput = ref<HTMLInputElement | null>(null);
+const savingAccreditation = ref(false);
+const accreditationMessage = ref("");
+const accreditationError = ref("");
 const savingResult = ref(false);
 const resultMessage = ref("");
 const resultError = ref("");
@@ -1145,6 +1252,7 @@ onMounted(async () => {
     loadAirtimeAmounts(),
     loadMyResults(),
     loadMyResultSheets(),
+    loadAccreditation(),
   ]);
 });
 
@@ -1252,6 +1360,8 @@ async function saveResultSheet() {
       formData.append("accuracy_m", String(position.coords.accuracy));
     }
     formData.append("device_captured_at", new Date().toISOString());
+    formData.append("device_id", useDeviceId());
+    formData.append("app_version", APP_VERSION);
     formData.append("photo", resultSheetPhoto.value, resultSheetPhoto.value.name || "result-sheet.jpg");
 
     const res = await $fetch<AgentResultSheet>(`${apiBase}/agents/me/result-sheets`, {
@@ -1288,6 +1398,70 @@ async function viewResultSheetPhoto(sheet: AgentResultSheet) {
     window.open(url, "_blank");
   } catch {
     resultSheetError.value = "Could not load the photo.";
+  }
+}
+
+function accreditationStatusLabel(status: string) {
+  if (status === "approved") return "Approved";
+  if (status === "pending") return "Pending review";
+  if (status === "rejected") return "Rejected";
+  return "Not submitted";
+}
+
+function accreditationStatusClass(status: string) {
+  if (status === "approved") return "bg-emerald-500/15 text-emerald-600";
+  if (status === "pending") return "bg-amber-500/15 text-amber-700";
+  if (status === "rejected") return "bg-red-500/15 text-red-600";
+  return "bg-ui-muted/20 text-ui-muted";
+}
+
+function onSelectAccreditationDoc(event: Event) {
+  const input = event.target as HTMLInputElement;
+  accreditationDoc.value = input.files?.[0] ?? null;
+}
+
+async function loadAccreditation() {
+  try {
+    accreditation.value = await $fetch<Accreditation>(`${apiBase}/agents/me/accreditation`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    // keep defaults
+  }
+}
+
+async function submitAccreditation() {
+  accreditationMessage.value = "";
+  accreditationError.value = "";
+  if (!accreditationDoc.value) {
+    accreditationError.value = "Attach your accreditation document.";
+    return;
+  }
+  savingAccreditation.value = true;
+  try {
+    const formData = new FormData();
+    if (accreditationForm.accreditation_number) {
+      formData.append("accreditation_number", accreditationForm.accreditation_number);
+    }
+    if (accreditationForm.party_name) {
+      formData.append("party_name", accreditationForm.party_name);
+    }
+    formData.append("is_ec8a_signatory", String(accreditationForm.is_ec8a_signatory));
+    formData.append("document", accreditationDoc.value, accreditationDoc.value.name || "accreditation");
+
+    accreditation.value = await $fetch<Accreditation>(`${apiBase}/agents/me/accreditation`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData,
+    });
+    accreditationMessage.value = "Submitted for admin review.";
+    accreditationDoc.value = null;
+    if (accreditationFileInput.value) accreditationFileInput.value.value = "";
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    accreditationError.value = typeof detail === "string" ? detail : "Failed to submit accreditation.";
+  } finally {
+    savingAccreditation.value = false;
   }
 }
 
