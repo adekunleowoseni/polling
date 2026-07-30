@@ -1124,6 +1124,10 @@ type AirtimeAmount = {
 type AppSettings = {
   strict_one_data_claim_per_phone: boolean;
   strict_one_airtime_claim_per_phone: boolean;
+  irev_enabled: boolean;
+  irev_api_base: string;
+  irev_election_id: string;
+  irev_poll_interval_seconds: number;
 };
 
 type AirtimeCredit = {
@@ -1420,8 +1424,35 @@ const filteredVoteSummary = computed(() => {
 const appSettings = ref<AppSettings>({
   strict_one_data_claim_per_phone: false,
   strict_one_airtime_claim_per_phone: false,
+  irev_enabled: false,
+  irev_api_base: "",
+  irev_election_id: "",
+  irev_poll_interval_seconds: 300,
 });
 const savingSettings = ref(false);
+
+type IrevStatus = {
+  enabled: boolean;
+  configured: boolean;
+  irev_api_base: string | null;
+  irev_election_id: string | null;
+  poll_interval_seconds: number;
+  mapped_polling_units: number;
+  auto_filled_result_sheets: number;
+};
+
+const irevConfigDraft = reactive({
+  irev_enabled: false,
+  irev_api_base: "",
+  irev_election_id: "",
+  irev_poll_interval_seconds: 300,
+});
+const savingIrevConfig = ref(false);
+const irevStatus = ref<IrevStatus | null>(null);
+const irevSyncStateId = ref("");
+const syncingIrev = ref(false);
+const irevSyncResult = ref("");
+const irevSyncError = ref("");
 
 function planKey(plan: Pick<DataPlan, "network" | "variation_code">) {
   return `${plan.network}::${plan.variation_code}`;
@@ -1542,6 +1573,10 @@ watch(activeTab, async (tab) => {
   if (tab === "votes") {
     loadVoteResults();
     loadResultSheets();
+    if (admin.value?.role === "super_admin") {
+      loadAppSettings();
+      loadIrevStatus();
+    }
   }
   if (tab === "data") {
     await loadVtpassStatus();
@@ -1578,7 +1613,11 @@ async function loadOverview() {
 
 async function openVoteResults() {
   activeTab.value = "votes";
-  await Promise.all([loadVoteResults(), loadResultSheets()]);
+  const tasks = [loadVoteResults(), loadResultSheets()];
+  if (admin.value?.role === "super_admin") {
+    tasks.push(loadAppSettings(), loadIrevStatus());
+  }
+  await Promise.all(tasks);
 }
 
 async function loadVoteResults() {
