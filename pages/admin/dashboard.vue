@@ -340,6 +340,55 @@
         />
       </div>
 
+      <div v-if="admin?.role === 'super_admin' && pendingAccreditations.length" class="border-b border-ui-border/40 bg-amber-500/5 p-5">
+        <h3 class="text-sm font-semibold text-ui-text">
+          Pending accreditation review ({{ pendingAccreditations.length }})
+        </h3>
+        <ul class="mt-3 space-y-3">
+          <li
+            v-for="row in pendingAccreditations"
+            :key="row.agent_id"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ui-border/40 bg-ui-surface p-3"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-ui-text">{{ row.agent_name }}</p>
+              <p class="text-xs text-ui-muted">
+                {{ row.agent_email }} · {{ row.ward }}, {{ row.lga }}
+                <span v-if="row.party_name"> · {{ row.party_name }}</span>
+                <span v-if="row.accreditation_number"> · #{{ row.accreditation_number }}</span>
+                <span v-if="row.is_ec8a_signatory"> · EC8A signatory</span>
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="rounded-lg border border-ui-border/40 px-3 py-1.5 text-xs text-ui-text hover:bg-ui-elevated/40"
+                @click="viewAccreditationDocument(row.agent_id)"
+              >
+                View document
+              </button>
+              <button
+                type="button"
+                class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-emerald-500"
+                :disabled="accreditationActionBusy === row.agent_id"
+                @click="approveAccreditation(row.agent_id)"
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                class="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white hover:bg-red-500"
+                :disabled="accreditationActionBusy === row.agent_id"
+                @click="rejectAccreditation(row.agent_id)"
+              >
+                Reject
+              </button>
+            </div>
+          </li>
+        </ul>
+        <p v-if="accreditationActionError" class="mt-3 text-sm text-red-500">{{ accreditationActionError }}</p>
+      </div>
+
       <div v-if="loadingAgents" class="p-8 text-center text-sm text-ui-muted">Loading…</div>
       <div v-else-if="!filteredAgents.length" class="p-8 text-center text-sm text-ui-muted">No agents match your search.</div>
 
@@ -1021,13 +1070,22 @@
               </p>
             </div>
             <div class="flex flex-col items-end gap-2">
-              <button
-                type="button"
-                class="rounded-lg border border-ui-border/40 px-3 py-1.5 text-xs text-ui-text hover:bg-ui-elevated/40"
-                @click="viewAdminResultSheetPhoto(row)"
-              >
-                View photo
-              </button>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="rounded-lg border border-ui-border/40 px-3 py-1.5 text-xs text-ui-text hover:bg-ui-elevated/40"
+                  @click="viewAdminResultSheetPhoto(row)"
+                >
+                  View photo
+                </button>
+                <NuxtLink
+                  :to="`/admin/result-sheets/${row.id}/certificate`"
+                  target="_blank"
+                  class="rounded-lg border border-ui-border/40 px-3 py-1.5 text-xs text-ui-text hover:bg-ui-elevated/40"
+                >
+                  Certificate
+                </NuxtLink>
+              </div>
               <form class="flex items-center gap-1.5" @submit.prevent="saveOfficialFigure(row)">
                 <input
                   v-model.number="officialFigureDrafts[row.id]"
@@ -1294,6 +1352,23 @@ const playingRecordingTitle = ref("");
 const loadingUnits = ref(false);
 const loadingSnaps = ref(false);
 const loadingAgents = ref(false);
+
+type PendingAccreditation = {
+  agent_id: string;
+  agent_name: string;
+  agent_email: string;
+  lga: string | null;
+  ward: string | null;
+  state: string | null;
+  accreditation_status: string;
+  accreditation_number: string | null;
+  party_name: string | null;
+  is_ec8a_signatory: boolean | null;
+};
+
+const pendingAccreditations = ref<PendingAccreditation[]>([]);
+const accreditationActionBusy = ref<string | null>(null);
+const accreditationActionError = ref("");
 const message = ref("");
 const actionError = ref("");
 
@@ -1662,7 +1737,10 @@ watch(activeTab, async (tab) => {
   if (tab === "feeds" && !units.value.length) loadUnits();
   if (tab === "snaps" && !snaps.value.length) loadSnaps();
   if (tab === "recordings") loadRecordings();
-  if (tab === "agents" && !agents.value.length) loadAgents();
+  if (tab === "agents") {
+    if (!agents.value.length) loadAgents();
+    if (admin.value?.role === "super_admin") loadPendingAccreditations();
+  }
   if (tab === "votes") {
     loadVoteResults();
     loadResultSheets();
@@ -1816,6 +1894,67 @@ async function loadAgents() {
     actionError.value = "Failed to load agents.";
   } finally {
     loadingAgents.value = false;
+  }
+}
+
+async function loadPendingAccreditations() {
+  try {
+    pendingAccreditations.value = await $fetch<PendingAccreditation[]>(
+      `${apiBase}/admin/accreditation/pending`,
+      { headers: authHeaders() },
+    );
+  } catch {
+    pendingAccreditations.value = [];
+  }
+}
+
+async function viewAccreditationDocument(agentId: string) {
+  accreditationActionError.value = "";
+  try {
+    const res = await fetch(`${apiBase}/admin/agents/${agentId}/accreditation/document`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to load document.");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  } catch {
+    accreditationActionError.value = "Could not load the accreditation document.";
+  }
+}
+
+async function approveAccreditation(agentId: string) {
+  accreditationActionBusy.value = agentId;
+  accreditationActionError.value = "";
+  try {
+    await $fetch(`${apiBase}/admin/agents/${agentId}/accreditation/approve`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    await loadPendingAccreditations();
+  } catch {
+    accreditationActionError.value = "Failed to approve accreditation.";
+  } finally {
+    accreditationActionBusy.value = null;
+  }
+}
+
+async function rejectAccreditation(agentId: string) {
+  const reason = window.prompt("Reason for rejecting this accreditation:");
+  if (!reason) return;
+  accreditationActionBusy.value = agentId;
+  accreditationActionError.value = "";
+  try {
+    await $fetch(`${apiBase}/admin/agents/${agentId}/accreditation/reject`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: { reason },
+    });
+    await loadPendingAccreditations();
+  } catch {
+    accreditationActionError.value = "Failed to reject accreditation.";
+  } finally {
+    accreditationActionBusy.value = null;
   }
 }
 
