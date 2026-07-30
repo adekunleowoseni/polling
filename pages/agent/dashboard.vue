@@ -869,6 +869,23 @@
         </form>
       </div>
 
+      <div
+        v-if="witnessPromptCode"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-700 dark:text-amber-400"
+      >
+        <span>
+          This unit shows a possible irregularity — record a witness statement while it's fresh in
+          your mind.
+        </span>
+        <button
+          type="button"
+          class="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+          @click="startWitnessStatement(witnessPromptCode)"
+        >
+          Record statement
+        </button>
+      </div>
+
       <div class="ui-card overflow-hidden">
         <div class="border-b border-ui-border/40 px-5 py-3">
           <h3 class="text-sm font-semibold text-ui-text">Your submitted result sheets</h3>
@@ -915,6 +932,113 @@
             >
               View photo
             </button>
+          </li>
+        </ul>
+      </div>
+
+      <div id="witness-statement-form" class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-4">
+          <h2 class="font-semibold text-ui-text">Record a witness statement</h2>
+          <p class="mt-1 text-xs text-ui-muted">
+            A photo alone is weak evidence without testimony. Record what happened while it's
+            fresh — who was present, what was said, in what order. Include any security agents,
+            journalists, or other observers on site as corroborating witnesses.
+          </p>
+        </div>
+        <form class="space-y-4 p-5" @submit.prevent="submitWitnessStatement">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-xs text-ui-muted">Polling unit</span>
+              <select v-model="witnessForm.code" required class="ui-input mt-1">
+                <option value="" disabled>Select your polling unit</option>
+                <option v-for="unit in units" :key="unit.code" :value="unit.code">
+                  {{ unit.code }} — {{ unit.name }}
+                </option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-xs text-ui-muted">What happened</span>
+              <select v-model="witnessForm.incident_category" required class="ui-input mt-1">
+                <option value="over_voting">Over-voting</option>
+                <option value="violence">Violence / intimidation</option>
+                <option value="vote_buying">Vote buying</option>
+                <option value="snatching">Ballot box snatching</option>
+                <option value="irev_missing">Result not uploaded to IReV</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label class="block sm:col-span-2">
+              <span class="text-xs text-ui-muted">What happened, in your own words</span>
+              <textarea
+                v-model="witnessForm.narrative"
+                rows="5"
+                required
+                minlength="10"
+                placeholder="Describe what you saw and heard, in the order it happened."
+                class="ui-input mt-1"
+              />
+            </label>
+            <label class="block">
+              <span class="text-xs text-ui-muted">When this happened</span>
+              <input v-model="witnessForm.occurred_at" type="datetime-local" class="ui-input mt-1" />
+            </label>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-ui-muted">Others present (security, journalists, observers)</span>
+              <button type="button" class="text-xs text-emerald-600 hover:underline" @click="addWitnessPerson">
+                + Add person
+              </button>
+            </div>
+            <div v-for="(person, idx) in witnessForm.people_present" :key="idx" class="mt-2 grid gap-2 sm:grid-cols-4">
+              <input v-model="person.name" type="text" placeholder="Name" class="ui-input text-xs sm:col-span-2" />
+              <input v-model="person.role" type="text" placeholder="Role / organization" class="ui-input text-xs" />
+              <div class="flex gap-1">
+                <input v-model="person.phone" type="text" placeholder="Phone" class="ui-input text-xs" />
+                <button
+                  type="button"
+                  class="shrink-0 rounded-lg border border-ui-border/40 px-2 text-xs text-ui-muted hover:bg-ui-elevated/40"
+                  @click="witnessForm.people_present.splice(idx, 1)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            class="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+            :disabled="savingWitnessStatement || !witnessForm.code || witnessForm.narrative.length < 10"
+          >
+            {{ savingWitnessStatement ? "Saving…" : "Save statement" }}
+          </button>
+          <p v-if="witnessMessage" class="text-sm text-emerald-600 dark:text-emerald-400">{{ witnessMessage }}</p>
+          <p v-if="witnessError" class="text-sm text-red-500">{{ witnessError }}</p>
+        </form>
+      </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-3">
+          <h3 class="text-sm font-semibold text-ui-text">Your witness statements</h3>
+        </div>
+        <div v-if="!myWitnessStatements.length" class="p-8 text-center text-sm text-ui-muted">
+          No witness statements submitted yet.
+        </div>
+        <ul v-else class="divide-y divide-ui-border/30">
+          <li v-for="row in myWitnessStatements" :key="row.id" class="px-5 py-3">
+            <p class="text-sm font-medium text-ui-text">
+              {{ row.polling_unit_name }}
+              <span class="ml-1 rounded-full bg-ui-muted/20 px-2 py-0.5 text-[10px] font-semibold text-ui-muted">
+                {{ row.incident_category.replace("_", " ") }}
+              </span>
+            </p>
+            <p class="mt-1 text-xs text-ui-muted line-clamp-2">{{ row.narrative }}</p>
+            <p class="mt-1 text-[10px] text-ui-muted">
+              Submitted {{ formatWhen(row.submitted_at) }}
+              <span v-if="row.people_present.length"> · {{ row.people_present.length }} other witness(es) named</span>
+            </p>
           </li>
         </ul>
       </div>
@@ -1090,6 +1214,37 @@ const savingResultSheet = ref(false);
 const resultSheetMessage = ref("");
 const resultSheetError = ref("");
 const myResultSheets = ref<AgentResultSheet[]>([]);
+const witnessPromptCode = ref("");
+
+type WitnessPerson = { name: string; role: string; phone: string };
+
+type AgentWitnessStatement = {
+  id: string;
+  code: string;
+  polling_unit_name: string;
+  incident_category: string;
+  narrative: string;
+  people_present: WitnessPerson[];
+  submitted_at: string;
+};
+
+const witnessForm = reactive<{
+  code: string;
+  incident_category: string;
+  narrative: string;
+  occurred_at: string;
+  people_present: WitnessPerson[];
+}>({
+  code: "",
+  incident_category: "over_voting",
+  narrative: "",
+  occurred_at: "",
+  people_present: [],
+});
+const savingWitnessStatement = ref(false);
+const witnessMessage = ref("");
+const witnessError = ref("");
+const myWitnessStatements = ref<AgentWitnessStatement[]>([]);
 
 type Accreditation = {
   accreditation_status: string;
@@ -1253,6 +1408,7 @@ onMounted(async () => {
     loadMyResults(),
     loadMyResultSheets(),
     loadAccreditation(),
+    loadMyWitnessStatements(),
   ]);
 });
 
@@ -1372,6 +1528,7 @@ async function saveResultSheet() {
     resultSheetMessage.value = `Saved result sheet for ${res.polling_unit_name}${
       res.version > 1 ? ` (correction #${res.version})` : ""
     }.`;
+    witnessPromptCode.value = res.over_accreditation ? res.code : "";
     resultSheetForm.votes = 0;
     resultSheetForm.accredited_voters = null;
     resultSheetForm.registered_voters = null;
@@ -1398,6 +1555,75 @@ async function viewResultSheetPhoto(sheet: AgentResultSheet) {
     window.open(url, "_blank");
   } catch {
     resultSheetError.value = "Could not load the photo.";
+  }
+}
+
+function addWitnessPerson() {
+  witnessForm.people_present.push({ name: "", role: "", phone: "" });
+}
+
+function startWitnessStatement(code: string) {
+  witnessForm.code = code;
+  witnessPromptCode.value = "";
+  nextTick(() => {
+    document.getElementById("witness-statement-form")?.scrollIntoView({ behavior: "smooth" });
+  });
+}
+
+async function loadMyWitnessStatements() {
+  try {
+    myWitnessStatements.value = await $fetch<AgentWitnessStatement[]>(`${apiBase}/agents/me/witness-statements`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    myWitnessStatements.value = [];
+  }
+}
+
+async function submitWitnessStatement() {
+  witnessMessage.value = "";
+  witnessError.value = "";
+  if (!witnessForm.code) {
+    witnessError.value = "Choose a polling unit.";
+    return;
+  }
+  if (witnessForm.narrative.trim().length < 10) {
+    witnessError.value = "Describe what happened in a bit more detail.";
+    return;
+  }
+  savingWitnessStatement.value = true;
+  try {
+    const position = await getPositionBestEffort();
+    const formData = new FormData();
+    formData.append("code", witnessForm.code);
+    formData.append("incident_category", witnessForm.incident_category);
+    formData.append("narrative", witnessForm.narrative);
+    if (witnessForm.occurred_at) {
+      formData.append("occurred_at", new Date(witnessForm.occurred_at).toISOString());
+    }
+    const people = witnessForm.people_present.filter((p) => p.name.trim());
+    if (people.length) {
+      formData.append("people_present", JSON.stringify(people));
+    }
+    if (position) {
+      formData.append("lat", String(position.coords.latitude));
+      formData.append("lng", String(position.coords.longitude));
+    }
+
+    await $fetch(`${apiBase}/agents/me/witness-statements`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData,
+    });
+    witnessMessage.value = "Statement saved.";
+    witnessForm.narrative = "";
+    witnessForm.people_present = [];
+    await loadMyWitnessStatements();
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    witnessError.value = typeof detail === "string" ? detail : "Failed to save statement.";
+  } finally {
+    savingWitnessStatement.value = false;
   }
 }
 
