@@ -951,6 +951,108 @@
           </table>
         </div>
       </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
+          <div>
+            <h2 class="font-semibold text-ui-text">EC8A result sheets (photo evidence)</h2>
+            <p class="mt-1 text-xs text-ui-muted">
+              Immutable, timestamped photos agents captured at each unit. Enter the official
+              figure (from IReV or collation) as you confirm it — the difference is flagged
+              automatically.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10"
+            :disabled="loadingResultSheets"
+            @click="loadResultSheets"
+          >
+            {{ loadingResultSheets ? "Loading…" : "Refresh" }}
+          </button>
+        </div>
+
+        <div v-if="!resultSheets.length" class="p-8 text-center text-sm text-ui-muted">
+          No result sheets submitted yet.
+        </div>
+        <ul v-else class="divide-y divide-ui-border/30">
+          <li
+            v-for="row in resultSheets"
+            :key="row.id"
+            class="flex flex-wrap items-start justify-between gap-4 px-5 py-4"
+          >
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-ui-text">
+                {{ row.polling_unit_name }}
+                <span
+                  v-if="row.version > 1"
+                  class="ml-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                >
+                  Correction #{{ row.version }}
+                </span>
+                <span
+                  v-if="row.over_accreditation"
+                  class="ml-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-600"
+                >
+                  Over-voting?
+                </span>
+              </p>
+              <p class="text-xs text-ui-muted">{{ row.code }} · {{ row.state }} · {{ row.ward }}, {{ row.lga }}</p>
+              <p class="mt-1 text-xs text-ui-muted">
+                Votes: <span class="font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</span>
+                <span v-if="row.accredited_voters !== null">
+                  · Accredited: {{ row.accredited_voters?.toLocaleString() }}
+                </span>
+                <span v-if="row.people_count_at_capture">
+                  · People on-site: {{ row.people_count_at_capture.toLocaleString() }}
+                </span>
+              </p>
+              <p
+                v-if="row.discrepancy_note"
+                class="mt-1 text-xs"
+                :class="row.official_diff ? 'text-red-600' : 'text-emerald-600'"
+              >
+                {{ row.discrepancy_note }}
+              </p>
+              <p class="mt-0.5 text-[10px] text-ui-muted">
+                Captured {{ formatWhen(row.received_at) }}
+                <span v-if="row.captured_lat !== null"> · GPS logged</span>
+                · Hash {{ row.sha256.slice(0, 10) }}…
+              </p>
+            </div>
+            <div class="flex flex-col items-end gap-2">
+              <button
+                type="button"
+                class="rounded-lg border border-ui-border/40 px-3 py-1.5 text-xs text-ui-text hover:bg-ui-elevated/40"
+                @click="viewAdminResultSheetPhoto(row)"
+              >
+                View photo
+              </button>
+              <form class="flex items-center gap-1.5" @submit.prevent="saveOfficialFigure(row)">
+                <input
+                  v-model.number="officialFigureDrafts[row.id]"
+                  type="number"
+                  min="0"
+                  placeholder="Official #"
+                  class="ui-input w-28 py-1 text-xs"
+                />
+                <button
+                  type="submit"
+                  class="rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs text-white hover:bg-violet-500 disabled:opacity-50"
+                  :disabled="
+                    savingOfficialFigure === row.id ||
+                    officialFigureDrafts[row.id] === undefined ||
+                    officialFigureDrafts[row.id] === null
+                  "
+                >
+                  {{ savingOfficialFigure === row.id ? "Saving…" : "Save" }}
+                </button>
+              </form>
+            </div>
+          </li>
+        </ul>
+        <p v-if="resultSheetsError" class="px-5 pb-4 text-sm text-red-500">{{ resultSheetsError }}</p>
+      </div>
     </section>
 
     <AdminAgentManageModal
@@ -1165,6 +1267,34 @@ type VoteResultsSummary = {
 const voteSummary = ref<VoteResultsSummary | null>(null);
 const loadingVotes = ref(false);
 const voteDetailTab = ref<"units" | "lgas" | "wards">("units");
+
+type AdminResultSheet = {
+  id: string;
+  code: string;
+  polling_unit_name: string;
+  state: string;
+  ward: string;
+  lga: string;
+  agent_id: string | null;
+  votes: number;
+  accredited_voters: number | null;
+  people_count_at_capture: number;
+  sha256: string;
+  captured_lat: number | null;
+  captured_lng: number | null;
+  received_at: string;
+  version: number;
+  official_votes: number | null;
+  official_diff: number | null;
+  discrepancy_note: string | null;
+  over_accreditation: boolean;
+};
+
+const resultSheets = ref<AdminResultSheet[]>([]);
+const loadingResultSheets = ref(false);
+const resultSheetsError = ref("");
+const officialFigureDrafts = reactive<Record<string, number | null>>({});
+const savingOfficialFigure = ref<string | null>(null);
 const stateScopeFilter = ref<"all" | "Ogun State" | "Osun State">("all");
 
 const showStateScopeFilter = computed(
@@ -1409,7 +1539,10 @@ watch(activeTab, async (tab) => {
   if (tab === "snaps" && !snaps.value.length) loadSnaps();
   if (tab === "recordings") loadRecordings();
   if (tab === "agents" && !agents.value.length) loadAgents();
-  if (tab === "votes") loadVoteResults();
+  if (tab === "votes") {
+    loadVoteResults();
+    loadResultSheets();
+  }
   if (tab === "data") {
     await loadVtpassStatus();
     await loadVtpassBalance();
@@ -1445,7 +1578,7 @@ async function loadOverview() {
 
 async function openVoteResults() {
   activeTab.value = "votes";
-  await loadVoteResults();
+  await Promise.all([loadVoteResults(), loadResultSheets()]);
 }
 
 async function loadVoteResults() {
@@ -1460,6 +1593,61 @@ async function loadVoteResults() {
     voteSummary.value = null;
   } finally {
     loadingVotes.value = false;
+  }
+}
+
+async function loadResultSheets() {
+  loadingResultSheets.value = true;
+  resultSheetsError.value = "";
+  try {
+    resultSheets.value = await $fetch<AdminResultSheet[]>(`${apiBase}/admin/result-sheets`, {
+      headers: authHeaders(),
+    });
+    for (const row of resultSheets.value) {
+      if (officialFigureDrafts[row.id] === undefined) {
+        officialFigureDrafts[row.id] = row.official_votes;
+      }
+    }
+  } catch {
+    resultSheetsError.value = "Failed to load result sheets.";
+    resultSheets.value = [];
+  } finally {
+    loadingResultSheets.value = false;
+  }
+}
+
+async function viewAdminResultSheetPhoto(row: AdminResultSheet) {
+  resultSheetsError.value = "";
+  try {
+    const res = await fetch(`${apiBase}/admin/result-sheets/${row.id}/photo`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to load photo.");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  } catch {
+    resultSheetsError.value = "Could not load the photo.";
+  }
+}
+
+async function saveOfficialFigure(row: AdminResultSheet) {
+  const value = officialFigureDrafts[row.id];
+  if (value === undefined || value === null) return;
+  savingOfficialFigure.value = row.id;
+  resultSheetsError.value = "";
+  try {
+    const updated = await $fetch<AdminResultSheet>(`${apiBase}/admin/result-sheets/${row.id}/official-figure`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: { official_votes: value },
+    });
+    const idx = resultSheets.value.findIndex((r) => r.id === row.id);
+    if (idx !== -1) resultSheets.value[idx] = updated;
+  } catch {
+    resultSheetsError.value = "Failed to save the official figure.";
+  } finally {
+    savingOfficialFigure.value = null;
   }
 }
 

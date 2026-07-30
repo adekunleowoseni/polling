@@ -715,6 +715,135 @@
           </li>
         </ul>
       </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-4">
+          <h2 class="font-semibold text-ui-text">Submit EC8A result sheet (recommended)</h2>
+          <p class="mt-1 text-xs text-ui-muted">
+            Photograph the result sheet the moment it's announced at your unit. This creates a
+            timestamped, GPS-tagged record that can't be edited later — if a figure changes,
+            submit a new correction instead; both stay on file.
+          </p>
+        </div>
+        <form class="space-y-4 p-5" @submit.prevent="saveResultSheet">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block sm:col-span-2">
+              <span class="text-xs text-ui-muted">Polling unit</span>
+              <select v-model="resultSheetForm.code" required class="ui-input mt-1">
+                <option value="" disabled>Select your polling unit</option>
+                <option v-for="unit in units" :key="unit.code" :value="unit.code">
+                  {{ unit.code }} — {{ unit.name }} ({{ unit.ward }}, {{ unit.lga }})
+                </option>
+              </select>
+            </label>
+            <label class="block sm:col-span-2">
+              <span class="text-xs text-ui-muted">Photo of the result sheet (EC8A)</span>
+              <input
+                ref="resultSheetFileInput"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                required
+                class="mt-1 block w-full text-sm text-ui-muted"
+                @change="onSelectResultSheetPhoto"
+              />
+            </label>
+            <label class="block">
+              <span class="text-xs text-ui-muted">Votes (your candidate)</span>
+              <input
+                v-model.number="resultSheetForm.votes"
+                type="number"
+                min="0"
+                required
+                class="ui-input mt-1"
+              />
+            </label>
+            <label class="block">
+              <span class="text-xs text-ui-muted">Accredited voters (as announced)</span>
+              <input
+                v-model.number="resultSheetForm.accredited_voters"
+                type="number"
+                min="0"
+                class="ui-input mt-1"
+              />
+            </label>
+            <label class="block sm:col-span-2">
+              <span class="text-xs text-ui-muted">Registered voters at this unit (optional)</span>
+              <input
+                v-model.number="resultSheetForm.registered_voters"
+                type="number"
+                min="0"
+                class="ui-input mt-1"
+              />
+            </label>
+          </div>
+          <p class="text-[11px] text-ui-muted">
+            Your device's location is attached automatically if you allow it — it isn't required
+            to submit.
+          </p>
+          <button
+            type="submit"
+            class="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500 disabled:opacity-50"
+            :disabled="savingResultSheet || !resultSheetForm.code || !resultSheetPhoto"
+          >
+            {{ savingResultSheet ? "Uploading…" : "Submit result sheet" }}
+          </button>
+          <p v-if="resultSheetMessage" class="text-sm text-emerald-600 dark:text-emerald-400">
+            {{ resultSheetMessage }}
+          </p>
+          <p v-if="resultSheetError" class="text-sm text-red-500">{{ resultSheetError }}</p>
+        </form>
+      </div>
+
+      <div class="ui-card overflow-hidden">
+        <div class="border-b border-ui-border/40 px-5 py-3">
+          <h3 class="text-sm font-semibold text-ui-text">Your submitted result sheets</h3>
+        </div>
+        <div v-if="!myResultSheets.length" class="p-8 text-center text-sm text-ui-muted">
+          No result sheets submitted yet.
+        </div>
+        <ul v-else class="divide-y divide-ui-border/30">
+          <li
+            v-for="row in myResultSheets"
+            :key="row.id"
+            class="flex flex-wrap items-start justify-between gap-3 px-5 py-3"
+          >
+            <div>
+              <p class="text-sm font-medium text-ui-text">
+                {{ row.polling_unit_name }}
+                <span
+                  v-if="row.version > 1"
+                  class="ml-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                >
+                  Correction #{{ row.version }}
+                </span>
+              </p>
+              <p class="text-xs text-ui-muted">{{ row.code }} · {{ row.ward }}, {{ row.lga }}</p>
+              <p class="mt-1 text-xs text-ui-muted">
+                Votes: <span class="font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</span>
+                <span v-if="row.accredited_voters !== null">
+                  · Accredited: {{ row.accredited_voters?.toLocaleString() }}
+                </span>
+              </p>
+              <p v-if="row.discrepancy_note" class="mt-1 text-xs text-amber-600">
+                {{ row.discrepancy_note }}
+              </p>
+              <p class="mt-0.5 text-[10px] text-ui-muted">
+                Captured {{ formatWhen(row.received_at) }}
+                <span v-if="row.captured_lat !== null && row.captured_lng !== null"> · GPS logged</span>
+                · Hash {{ row.sha256.slice(0, 10) }}…
+              </p>
+            </div>
+            <button
+              type="button"
+              class="rounded-lg border border-ui-border/40 px-3 py-1.5 text-xs text-ui-text hover:bg-ui-elevated/40"
+              @click="viewResultSheetPhoto(row)"
+            >
+              View photo
+            </button>
+          </li>
+        </ul>
+      </div>
     </section>
   </div>
 </template>
@@ -847,6 +976,45 @@ const resultForm = reactive({
   votes: 0,
 });
 const myResults = ref<AgentVoteResult[]>([]);
+
+type AgentResultSheet = {
+  id: string;
+  code: string;
+  polling_unit_name: string;
+  ward: string;
+  lga: string;
+  votes: number;
+  accredited_voters: number | null;
+  registered_voters: number | null;
+  sha256: string;
+  captured_lat: number | null;
+  captured_lng: number | null;
+  received_at: string;
+  version: number;
+  supersedes_id: string | null;
+  official_votes: number | null;
+  official_diff: number | null;
+  discrepancy_note: string | null;
+  over_accreditation: boolean;
+};
+
+const resultSheetForm = reactive<{
+  code: string;
+  votes: number;
+  accredited_voters: number | null;
+  registered_voters: number | null;
+}>({
+  code: "",
+  votes: 0,
+  accredited_voters: null,
+  registered_voters: null,
+});
+const resultSheetPhoto = ref<File | null>(null);
+const resultSheetFileInput = ref<HTMLInputElement | null>(null);
+const savingResultSheet = ref(false);
+const resultSheetMessage = ref("");
+const resultSheetError = ref("");
+const myResultSheets = ref<AgentResultSheet[]>([]);
 const savingResult = ref(false);
 const resultMessage = ref("");
 const resultError = ref("");
@@ -976,6 +1144,7 @@ onMounted(async () => {
     loadAirtimeQuota(),
     loadAirtimeAmounts(),
     loadMyResults(),
+    loadMyResultSheets(),
   ]);
 });
 
@@ -1022,6 +1191,103 @@ async function saveResult() {
     resultError.value = typeof detail === "string" ? detail : "Failed to save result.";
   } finally {
     savingResult.value = false;
+  }
+}
+
+function onSelectResultSheetPhoto(event: Event) {
+  const input = event.target as HTMLInputElement;
+  resultSheetPhoto.value = input.files?.[0] ?? null;
+}
+
+function getPositionBestEffort(): Promise<GeolocationPosition | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(pos),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  });
+}
+
+async function loadMyResultSheets() {
+  try {
+    myResultSheets.value = await $fetch<AgentResultSheet[]>(`${apiBase}/agents/me/result-sheets`, {
+      headers: authHeaders(),
+    });
+  } catch {
+    myResultSheets.value = [];
+  }
+}
+
+async function saveResultSheet() {
+  resultSheetMessage.value = "";
+  resultSheetError.value = "";
+  if (!resultSheetForm.code) {
+    resultSheetError.value = "Choose a polling unit.";
+    return;
+  }
+  if (!resultSheetPhoto.value) {
+    resultSheetError.value = "Attach a photo of the result sheet.";
+    return;
+  }
+  savingResultSheet.value = true;
+  try {
+    const position = await getPositionBestEffort();
+    const formData = new FormData();
+    formData.append("code", resultSheetForm.code);
+    formData.append("votes", String(resultSheetForm.votes));
+    if (resultSheetForm.accredited_voters !== null) {
+      formData.append("accredited_voters", String(resultSheetForm.accredited_voters));
+    }
+    if (resultSheetForm.registered_voters !== null) {
+      formData.append("registered_voters", String(resultSheetForm.registered_voters));
+    }
+    if (position) {
+      formData.append("lat", String(position.coords.latitude));
+      formData.append("lng", String(position.coords.longitude));
+      formData.append("accuracy_m", String(position.coords.accuracy));
+    }
+    formData.append("device_captured_at", new Date().toISOString());
+    formData.append("photo", resultSheetPhoto.value, resultSheetPhoto.value.name || "result-sheet.jpg");
+
+    const res = await $fetch<AgentResultSheet>(`${apiBase}/agents/me/result-sheets`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData,
+    });
+    resultSheetMessage.value = `Saved result sheet for ${res.polling_unit_name}${
+      res.version > 1 ? ` (correction #${res.version})` : ""
+    }.`;
+    resultSheetForm.votes = 0;
+    resultSheetForm.accredited_voters = null;
+    resultSheetForm.registered_voters = null;
+    resultSheetPhoto.value = null;
+    if (resultSheetFileInput.value) resultSheetFileInput.value.value = "";
+    await loadMyResultSheets();
+  } catch (err: unknown) {
+    const detail = (err as { data?: { detail?: string } })?.data?.detail;
+    resultSheetError.value = typeof detail === "string" ? detail : "Failed to save result sheet.";
+  } finally {
+    savingResultSheet.value = false;
+  }
+}
+
+async function viewResultSheetPhoto(sheet: AgentResultSheet) {
+  resultSheetError.value = "";
+  try {
+    const res = await fetch(`${apiBase}/agents/me/result-sheets/${sheet.id}/photo`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to load photo.");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  } catch {
+    resultSheetError.value = "Could not load the photo.";
   }
 }
 
