@@ -789,7 +789,14 @@
     </section>
 
     <section v-else-if="activeTab === 'audit'">
-      <IndependentAuditPanel :api-base="apiBase" :auth-headers="authHeaders" />
+      <IndependentAuditPanel :api-base="apiBase" embedded />
+    </section>
+
+    <section v-else-if="activeTab === 'parties'">
+      <AdminPartiesPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
     </section>
 
     <section v-else-if="activeTab === 'votes'" class="space-y-4">
@@ -1121,6 +1128,7 @@
                 Captured {{ formatWhen(row.received_at) }}
                 <span v-if="row.captured_lat !== null"> · GPS logged</span>
                 · Hash {{ row.sha256.slice(0, 10) }}…
+                <span v-if="row.ipfs_cid"> · IPFS {{ row.ipfs_cid.slice(0, 8) }}…</span>
               </p>
             </div>
             <div class="flex flex-col items-end gap-2">
@@ -1388,6 +1396,7 @@ const ALL_TABS = [
   { id: "packages", label: "Packages" },
   { id: "inbox", label: "Inbox" },
   { id: "audit", label: "Independent Audit" },
+  { id: "parties", label: "Parties" },
   { id: "votes", label: "Vote results" },
   { id: "data", label: "Data plans" },
   { id: "airtime", label: "Airtime" },
@@ -1517,6 +1526,7 @@ type AdminResultSheet = {
   accredited_voters: number | null;
   people_count_at_capture: number;
   sha256: string;
+  ipfs_cid?: string | null;
   captured_lat: number | null;
   captured_lng: number | null;
   received_at: string;

@@ -78,8 +78,12 @@
               {{ formatWhen(rs.received_at) }}
             </p>
             <p class="mt-1 break-all font-mono text-[10px] text-ui-muted">SHA-256: {{ rs.sha256 }}</p>
+            <p v-if="rs.ipfs_cid" class="mt-1 break-all font-mono text-[10px] text-ui-muted">IPFS: {{ rs.ipfs_cid }}</p>
             <NuxtLink :to="`/admin/result-sheets/${rs.id}/certificate`" target="_blank" class="no-print text-emerald-600 hover:underline">
               View certificate →
+            </NuxtLink>
+            <NuxtLink :to="`/verify?q=${rs.sha256}`" target="_blank" class="no-print ml-2 text-emerald-600 hover:underline">
+              Verify →
             </NuxtLink>
           </li>
         </ul>
@@ -120,6 +124,7 @@ type ResultSheetBrief = {
   version: number;
   votes: number;
   sha256: string;
+  ipfs_cid?: string | null;
   received_at: string;
 };
 

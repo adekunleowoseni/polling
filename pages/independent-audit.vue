@@ -1,17 +1,20 @@
 <template>
-  <div class="mx-auto max-w-7xl p-4 sm:p-6">
-    <IndependentAuditPanel :api-base="apiBase" :auth-headers="authHeaders" />
-  </div>
+  <IndependentAuditPanel :api-base="apiBase" />
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: "default" });
+definePageMeta({ layout: "audit" });
 
-useHead({ title: "Independent Audit" });
-
-const { requireAdmin, authHeaders, apiBase } = useAdminAuth();
-
-onMounted(() => {
-  requireAdmin("/independent-audit");
+useHead({
+  title: "Ogun State Independent Audit",
+  meta: [
+    {
+      name: "viewport",
+      content: "width=device-width, initial-scale=1, viewport-fit=cover",
+    },
+  ],
 });
+
+const config = useRuntimeConfig();
+const apiBase = config.public.apiBase;
 </script>

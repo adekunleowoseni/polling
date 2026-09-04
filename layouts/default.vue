@@ -48,6 +48,13 @@
               Independent Audit
             </NuxtLink>
             <NuxtLink
+              to="/verify"
+              class="ui-nav-link"
+              active-class="ui-nav-link-active"
+            >
+              Verify
+            </NuxtLink>
+            <NuxtLink
               v-if="dashboardHref"
               :to="dashboardHref"
               class="ui-nav-link"
