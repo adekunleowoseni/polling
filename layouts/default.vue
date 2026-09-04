@@ -41,6 +41,13 @@
               Scan Form
             </NuxtLink>
             <NuxtLink
+              to="/independent-audit"
+              class="ui-nav-link"
+              active-class="ui-nav-link-active"
+            >
+              Independent Audit
+            </NuxtLink>
+            <NuxtLink
               v-if="dashboardHref"
               :to="dashboardHref"
               class="ui-nav-link"

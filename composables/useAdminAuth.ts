@@ -99,17 +99,17 @@ export function useAdminAuth() {
     if (!allowed || allowed.length === 0) {
       // Legacy sessions without allowed_tabs: super keeps all, state uses defaults
       if (admin.value?.role === "state_admin") {
-        return ["overview", "feeds", "snaps", "recordings", "agents", "votes"].includes(tabId);
+        return ["overview", "feeds", "snaps", "recordings", "agents", "votes", "disbursements", "packages", "inbox", "audit"].includes(tabId);
       }
       return true;
     }
     return allowed.includes(tabId);
   }
 
-  function requireAdmin() {
+  function requireAdmin(next = "/admin/dashboard") {
     if (!ready.value) loadFromStorage();
     if (!token.value) {
-      navigateTo("/admin/login");
+      navigateTo({ path: "/admin/login", query: { next } });
       return false;
     }
     return true;

@@ -92,6 +92,35 @@
           </section>
 
           <section class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-4">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">Inbox permissions</h3>
+            <p class="mt-1 text-xs text-ui-muted">
+              Allow this agent to message voters/members or post invites and materials from the mobile app.
+            </p>
+            <div class="mt-3 space-y-2 text-sm">
+              <label class="flex items-center gap-2">
+                <input v-model="editCanMessage" type="checkbox" />
+                Send messages
+              </label>
+              <label class="flex items-center gap-2">
+                <input v-model="editCanInvites" type="checkbox" />
+                Post action invites
+              </label>
+              <label class="flex items-center gap-2">
+                <input v-model="editCanMaterials" type="checkbox" />
+                Post materials
+              </label>
+            </div>
+            <button
+              type="button"
+              class="mt-3 rounded-lg bg-violet-600 px-4 py-2 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+              :disabled="savingInboxPerms"
+              @click="saveInboxPermissions"
+            >
+              {{ savingInboxPerms ? "Saving…" : "Save inbox permissions" }}
+            </button>
+          </section>
+
+          <section class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-4">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">State / LGA / ward assignment</h3>
             <div class="mt-3 flex flex-wrap items-end gap-3">
               <label class="min-w-[140px] flex-1">
@@ -193,6 +222,9 @@ export type AdminAgentDetail = {
   data_claims_used: number;
   airtime_claim_limit: number;
   airtime_claims_used: number;
+  can_message_voters?: boolean;
+  can_post_invites?: boolean;
+  can_post_materials?: boolean;
   polling_units: {
     id: string;
     name: string;
@@ -207,7 +239,6 @@ export type AdminAgentDetail = {
 
 const STATE_OPTIONS = [
   { value: "Ogun State", label: "Ogun State", code: "ogun" },
-  { value: "Osun State", label: "Osun State", code: "osun" },
 ] as const;
 
 const props = defineProps<{
@@ -231,11 +262,15 @@ const editLga = ref("");
 const editWard = ref("");
 const editClaimLimit = ref(1);
 const editAirtimeLimit = ref(1);
+const editCanMessage = ref(false);
+const editCanInvites = ref(false);
+const editCanMaterials = ref(false);
 const lgas = ref<string[]>([]);
 const wards = ref<string[]>([]);
 const saving = ref(false);
 const savingClaims = ref(false);
 const savingAirtime = ref(false);
+const savingInboxPerms = ref(false);
 const deleting = ref(false);
 
 const stateOptions = computed(() => {
@@ -279,6 +314,9 @@ watch(
     editWard.value = agent.ward ?? "";
     editClaimLimit.value = agent.data_claim_limit ?? 1;
     editAirtimeLimit.value = agent.airtime_claim_limit ?? 1;
+    editCanMessage.value = !!agent.can_message_voters;
+    editCanInvites.value = !!agent.can_post_invites;
+    editCanMaterials.value = !!agent.can_post_materials;
     await loadLgasForState(editState.value);
     if (editState.value && editLga.value) {
       await loadWardsForLga(editState.value, editLga.value);
@@ -346,6 +384,25 @@ async function saveAirtimeLimit() {
     emit("updated");
   } finally {
     savingAirtime.value = false;
+  }
+}
+
+async function saveInboxPermissions() {
+  if (!props.agent) return;
+  savingInboxPerms.value = true;
+  try {
+    await $fetch(`${props.apiBase}/admin/agents/${props.agent.id}/inbox-permissions`, {
+      method: "PATCH",
+      headers: props.authHeaders(),
+      body: {
+        can_message_voters: editCanMessage.value,
+        can_post_invites: editCanInvites.value,
+        can_post_materials: editCanMaterials.value,
+      },
+    });
+    emit("updated");
+  } finally {
+    savingInboxPerms.value = false;
   }
 }
 

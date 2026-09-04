@@ -39,7 +39,13 @@
 definePageMeta({ layout: "default" });
 
 const router = useRouter();
+const route = useRoute();
 const { login, isLoggedIn } = useAdminAuth();
+
+const nextPath = computed(() => {
+  const next = route.query.next;
+  return typeof next === "string" && next.startsWith("/") ? next : "/admin/dashboard";
+});
 
 const email = ref("");
 const password = ref("");
@@ -47,7 +53,7 @@ const loading = ref(false);
 const error = ref("");
 
 onMounted(() => {
-  if (isLoggedIn.value) router.replace("/admin/dashboard");
+  if (isLoggedIn.value) router.replace(nextPath.value);
 });
 
 async function onSubmit() {
@@ -55,7 +61,7 @@ async function onSubmit() {
   error.value = "";
   try {
     await login(email.value, password.value);
-    await router.push("/admin/dashboard");
+    await router.push(nextPath.value);
   } catch (err: unknown) {
     const detail = (err as { data?: { detail?: string } })?.data?.detail;
     error.value = typeof detail === "string" ? detail : "Sign in failed.";
