@@ -58,6 +58,15 @@
           </dd>
           <dt class="text-ui-muted">SHA-256 of the photographed record</dt>
           <dd class="break-all font-mono">{{ cert.result_sheet.sha256 }}</dd>
+          <dt class="text-ui-muted">IPFS CID</dt>
+          <dd class="break-all font-mono">{{ cert.result_sheet.ipfs_cid || "pending" }}</dd>
+          <dt class="text-ui-muted">Public-chain commitment</dt>
+          <dd class="break-all font-mono">{{ cert.result_sheet.commitment_sha256 || "pending" }}</dd>
+          <dt class="text-ui-muted">Anchor</dt>
+          <dd>
+            {{ cert.result_sheet.anchor_status || "pending" }}
+            <span v-if="cert.result_sheet.tx_hash"> · {{ cert.result_sheet.tx_hash }}</span>
+          </dd>
         </dl>
       </section>
 
@@ -93,6 +102,13 @@
           <dd class="break-all font-mono">{{ cert.ledger_entry.prev_ledger_hash }}</dd>
         </dl>
         <p v-else class="mt-2 text-xs text-red-500">No ledger entry found for this record.</p>
+        <p class="no-print mt-3 text-xs">
+          <NuxtLink :to="`/verify?q=${cert.result_sheet.sha256}`" class="text-emerald-600 hover:underline">
+            Open public verify page →
+          </NuxtLink>
+          ·
+          <a :href="packHref" class="text-emerald-600 hover:underline">Download tribunal pack</a>
+        </p>
       </section>
 
       <section>
@@ -166,6 +182,10 @@ type ResultSheetOut = {
   captured_lng: number | null;
   captured_accuracy_m: number | null;
   sha256: string;
+  ipfs_cid: string | null;
+  commitment_sha256: string | null;
+  tx_hash: string | null;
+  anchor_status: string | null;
   agent_accreditation_number: string | null;
   agent_party_name: string | null;
   agent_is_ec8a_signatory: boolean | null;
@@ -202,6 +222,12 @@ const { authHeaders, requireAdmin } = useAdminAuth();
 const cert = ref<Certificate | null>(null);
 const loading = ref(true);
 const error = ref("");
+
+const packHref = computed(() => {
+  const id = route.params.id;
+  if (!id || Array.isArray(id)) return "#";
+  return `${apiBase}/public/evidence/result-sheet/${id}/pack`;
+});
 
 function formatWhen(iso: string) {
   try {
