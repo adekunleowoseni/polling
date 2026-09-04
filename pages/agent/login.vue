@@ -254,6 +254,10 @@
                   >
                     {{ mode === "login" ? "Create an account" : "Sign in instead" }}
                   </button>
+                  <span class="text-outline"> · </span>
+                  <NuxtLink to="/register" class="font-semibold text-secondary hover:underline">
+                    Org workspace
+                  </NuxtLink>
                 </p>
                 <div class="flex items-center gap-2 font-label-caps text-label-caps text-on-surface-variant">
                   <span class="material-symbols-outlined text-[16px] text-action-green">encrypted</span>
