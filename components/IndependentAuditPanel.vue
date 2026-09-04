@@ -107,9 +107,9 @@ const sheetOpen = ref(false);
 const expandedMatrix = ref("");
 
 const tabs = [
-  { id: "standings" as const, label: "Standings", full: "State Standings" },
-  { id: "explorer" as const, label: "Explorer", full: "Collation Explorer" },
-  { id: "matrix" as const, label: "Matrix", full: "Collation Matrix" },
+  { id: "standings" as const, label: "Standings", full: "State Standings", icon: "leaderboard" },
+  { id: "explorer" as const, label: "Explorer", full: "Collation Explorer", icon: "travel_explore" },
+  { id: "matrix" as const, label: "Matrix", full: "Collation Matrix", icon: "grid_on" },
 ];
 
 const standingParties = computed(() =>
@@ -157,7 +157,7 @@ const leader = computed(() => scopedStandings.value.find((row) => row.votes > 0)
 const donutStyle = computed(() => {
   const rows = scopedStandings.value;
   const total = rows.reduce((sum, row) => sum + row.votes, 0);
-  if (!total) return { background: "conic-gradient(#1e293b 0 100%)" };
+  if (!total) return { background: "conic-gradient(#E4E2E6 0 100%)" };
   let cursor = 0;
   const stops: string[] = [];
   for (const row of rows) {
@@ -166,7 +166,7 @@ const donutStyle = computed(() => {
     cursor += (row.votes / total) * 100;
     stops.push(`${row.color} ${start}% ${cursor}%`);
   }
-  if (!stops.length) return { background: "conic-gradient(#1e293b 0 100%)" };
+  if (!stops.length) return { background: "conic-gradient(#E4E2E6 0 100%)" };
   return { background: `conic-gradient(${stops.join(", ")})` };
 });
 
@@ -408,183 +408,253 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="audit-dash" :class="embedded ? 'audit-embedded' : 'audit-page'">
-    <header class="audit-header">
-      <div class="flex min-w-0 items-center gap-3">
-        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#4ade80] text-sm font-black tracking-tight text-[#052e16] shadow-[0_0_24px_rgba(74,222,128,0.25)]">
-          OG
-        </div>
-        <div class="min-w-0">
-          <p class="truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">
-            Ogun State 2026
-          </p>
-          <h1 class="truncate text-base font-semibold text-white sm:text-lg">
-            Governorship collation
-          </h1>
+  <div class="flex w-full flex-col pb-16" :class="embedded ? '' : 'min-h-screen bg-background px-4 pt-4 sm:px-6 lg:px-8'">
+    <!-- Breadcrumb -->
+    <div class="mb-2 flex flex-col justify-between gap-4 py-4 md:flex-row md:items-center">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="font-label-caps text-on-surface-variant">HQ CENTRAL COMMAND</span>
+        <span class="font-label-caps text-outline-variant">/</span>
+        <span class="font-label-caps text-on-surface-variant">OGUN OPERATIONS</span>
+        <span class="font-label-caps text-outline-variant">/</span>
+        <span class="font-label-caps font-semibold text-primary">TELEMETRY &amp; SECURITY</span>
+        <div class="ml-1 flex items-center gap-1.5 rounded bg-surface-container-high px-2 py-0.5">
+          <span class="relative flex h-1.5 w-1.5">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-action-green opacity-60" />
+            <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-action-green" />
+          </span>
+          <span class="font-label-caps text-xs font-semibold text-primary">LIVE AUDIT</span>
         </div>
       </div>
-
-      <div class="flex items-center gap-2">
-        <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
-          <span class="relative flex h-2 w-2">
-            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#4ade80] opacity-60" />
-            <span class="relative inline-flex h-2 w-2 rounded-full bg-[#4ade80]" />
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2 rounded-full bg-surface-container-low px-3 py-1 shadow-sm">
+          <span class="material-symbols-outlined text-[16px] text-action-green">verified_user</span>
+          <span class="font-label-caps text-[11px] font-medium text-on-surface">
+            {{ board?.unofficial !== false ? "UNOFFICIAL · EC8A" : "OFFICIAL FEED" }}
           </span>
-          Live
-        </span>
-        <span class="hidden rounded-full bg-sky-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-sky-300 sm:inline">
-          Unofficial
-        </span>
+        </div>
+        <span class="font-label-caps text-xs text-outline">UPDATED {{ formatStamp(board?.updated_at) }}</span>
+      </div>
+    </div>
+
+    <!-- Header -->
+    <div class="flex flex-col justify-between gap-6 pb-6 xl:flex-row xl:items-end">
+      <div class="max-w-3xl">
+        <div class="mb-2 flex flex-wrap items-center gap-3">
+          <span class="rounded-full bg-primary px-2.5 py-0.5 font-label-caps text-[11px] uppercase tracking-wider text-pure-white">
+            Ogun State 2026
+          </span>
+          <span class="rounded-full bg-secondary-fixed px-2.5 py-0.5 font-label-caps text-[11px] font-medium text-on-secondary-fixed">
+            Independent Collation
+          </span>
+        </div>
+        <h1 class="font-headline-lg text-2xl tracking-tight text-primary sm:text-headline-md lg:text-[40px] lg:leading-[48px]">
+          Telemetry &amp; Security
+        </h1>
+        <p class="mt-1.5 font-body-md leading-relaxed text-on-surface-variant">
+          Unofficial independent audit from Form EC8A uploads — standings, ward explorer, and LGA matrix. Not an INEC declaration.
+        </p>
+      </div>
+      <div class="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 xl:w-auto xl:shrink-0">
         <NuxtLink
           to="/monitor"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-slate-300 hover:bg-white/5 hover:text-[#4ade80]"
-          aria-label="Live monitoring"
-          title="Live monitoring"
+          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
         >
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-          </svg>
+          <span class="material-symbols-outlined shrink-0 text-[18px] text-outline">videocam</span>
+          <span class="truncate">Live Monitoring</span>
         </NuxtLink>
         <button
           type="button"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-slate-300 hover:bg-white/5 disabled:opacity-50"
+          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low disabled:opacity-60"
           :disabled="loading"
-          aria-label="Refresh collation"
           @click="loadBoard"
         >
-          <svg class="h-4 w-4" :class="loading ? 'animate-spin' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12a9 9 0 1 1-3-6.7" stroke-linecap="round" />
-            <path d="M21 3v6h-6" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
+          <span class="material-symbols-outlined shrink-0 text-[18px] text-outline" :class="loading ? 'animate-spin' : ''">
+            refresh
+          </span>
+          <span class="truncate">Refresh Board</span>
+        </button>
+        <button
+          type="button"
+          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-electric-pink px-4 font-button-text text-sm font-semibold text-pure-white shadow-sm shadow-electric-pink/25 transition hover:opacity-95"
+          @click="exportCsv"
+        >
+          <span class="material-symbols-outlined shrink-0 text-[18px]">download</span>
+          <span class="truncate">Export Matrix CSV</span>
         </button>
       </div>
-    </header>
+    </div>
 
-    <nav class="mt-4 hidden w-fit max-w-full gap-1 rounded-full border border-white/10 bg-[#0b1220] p-1 lg:flex" aria-label="Audit views">
+    <p
+      v-if="error"
+      class="mb-4 rounded-2xl bg-error-container/40 px-4 py-3 font-body-md text-sm text-error"
+    >
+      {{ error }}
+    </p>
+
+    <!-- KPI strip -->
+    <div class="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div class="flex flex-col justify-between rounded-2xl bg-surface-container-lowest p-4 shadow-sm sm:p-5">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="font-label-caps text-on-surface-variant">Polling units</span>
+          <span class="material-symbols-outlined text-[18px] text-outline">how_to_vote</span>
+        </div>
+        <p class="font-headline-md text-2xl font-bold tracking-tight text-primary sm:text-[28px]">
+          {{ formatNum(board?.totals.polling_units ?? 0) }}
+        </p>
+        <p class="mt-1 font-label-caps text-xs text-outline">{{ board?.lgas.length ?? 0 }} LGAs</p>
+      </div>
+      <div class="flex flex-col justify-between rounded-2xl bg-surface-container-lowest p-4 shadow-sm sm:p-5">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="font-label-caps text-on-surface-variant">Upload progress</span>
+          <span class="rounded bg-surface-container px-2 py-0.5 font-label-caps text-xs font-semibold text-primary">
+            {{ formatPct(board?.totals.upload_pct ?? 0, 1) }}
+          </span>
+        </div>
+        <p class="font-headline-md text-2xl font-bold tracking-tight text-primary sm:text-[28px]">
+          {{ formatNum(board?.totals.uploaded ?? 0) }}
+          <span class="font-body-md text-base font-normal text-outline">/ {{ formatNum(board?.totals.polling_units ?? 0) }}</span>
+        </p>
+        <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-surface-container-high">
+          <div
+            class="h-full rounded-full bg-action-green transition-all duration-500"
+            :style="{ width: `${Math.min(board?.totals.upload_pct ?? 0, 100)}%` }"
+          />
+        </div>
+      </div>
+      <div class="flex flex-col justify-between rounded-2xl bg-surface-container-lowest p-4 shadow-sm sm:p-5">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="font-label-caps text-on-surface-variant">Sheets collated</span>
+          <span class="material-symbols-outlined text-[18px] text-outline">fact_check</span>
+        </div>
+        <p class="font-headline-md text-2xl font-bold tracking-tight text-primary sm:text-[28px]">
+          {{ formatNum(board?.totals.collated ?? 0) }}
+        </p>
+        <p class="mt-1 font-label-caps text-xs text-outline">Observer verified</p>
+      </div>
+      <div class="flex flex-col justify-between rounded-2xl bg-surface-container-lowest p-4 shadow-sm sm:p-5">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="font-label-caps text-on-surface-variant">Collated votes</span>
+          <span class="material-symbols-outlined text-[18px] text-outline">insights</span>
+        </div>
+        <p class="font-headline-md text-2xl font-bold tracking-tight text-primary sm:text-[28px]">
+          {{ formatNum(board?.totals.total_votes ?? 0) }}
+        </p>
+        <p class="mt-1 font-label-caps text-xs text-outline">
+          <span v-if="board?.totals.leading_code">
+            Lead {{ board.totals.leading_code }} · {{ formatPct(board.totals.leading_share, 1) }}
+          </span>
+          <span v-else>Breakdown pending</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- View tabs -->
+    <div class="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="Audit views">
       <button
         v-for="tab in tabs"
         :key="tab.id"
         type="button"
-        class="rounded-full px-3.5 py-2 text-sm font-semibold text-slate-300"
-        :class="activeTab === tab.id ? 'bg-[#4ade80] text-slate-950' : 'hover:text-white'"
+        role="tab"
+        class="inline-flex h-11 items-center gap-2 rounded-xl px-4 font-button-text text-sm font-semibold transition"
+        :class="
+          activeTab === tab.id
+            ? 'bg-primary text-pure-white shadow-sm'
+            : 'bg-surface-container-lowest text-primary shadow-sm hover:bg-surface-container-low'
+        "
+        :aria-selected="activeTab === tab.id"
         @click="activeTab = tab.id"
       >
-        {{ tab.full }}
+        <span class="material-symbols-outlined text-[18px]">{{ tab.icon }}</span>
+        <span class="hidden sm:inline">{{ tab.full }}</span>
+        <span class="sm:hidden">{{ tab.label }}</span>
       </button>
-    </nav>
+    </div>
 
-    <p class="audit-banner">
-      Unofficial independent audit from Form EC8A uploads. Not an INEC declaration.
-      <span class="mt-1 block text-sky-300/70 sm:mt-0 sm:inline sm:before:content-['·_']">
-        Updated {{ formatStamp(board?.updated_at) }}
-      </span>
-    </p>
-
-    <p v-if="error" class="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-      {{ error }}
-    </p>
-
-    <section class="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
-      <article class="audit-stat">
-        <p class="audit-kicker">Polling units</p>
-        <p class="audit-metric">{{ formatNum(board?.totals.polling_units ?? 0) }}</p>
-        <p class="audit-sub">{{ board?.lgas.length ?? 0 }} LGAs</p>
-      </article>
-      <article class="audit-stat">
-        <p class="audit-kicker">Upload progress</p>
-        <p class="audit-metric">{{ formatPct(board?.totals.upload_pct ?? 0, 1) }}</p>
-        <p class="audit-sub">{{ formatNum(board?.totals.uploaded ?? 0) }} / {{ formatNum(board?.totals.polling_units ?? 0) }}</p>
-        <div class="mt-2 h-1 overflow-hidden rounded-full bg-slate-800">
-          <div class="h-full rounded-full bg-[#4ade80]" :style="{ width: `${Math.min(board?.totals.upload_pct ?? 0, 100)}%` }" />
-        </div>
-      </article>
-      <article class="audit-stat">
-        <p class="audit-kicker">Sheets collated</p>
-        <p class="audit-metric">{{ formatNum(board?.totals.collated ?? 0) }}</p>
-        <p class="audit-sub">Observer verified</p>
-      </article>
-      <article class="audit-stat">
-        <p class="audit-kicker">Collated votes</p>
-        <p class="audit-metric">{{ formatNum(board?.totals.total_votes ?? 0) }}</p>
-        <p class="audit-sub">
-          <span v-if="board?.totals.leading_code">{{ board.totals.leading_code }} {{ formatPct(board.totals.leading_share, 1) }}</span>
-          <span v-else>Breakdown pending</span>
-        </p>
-      </article>
-    </section>
-
-    <section v-if="activeTab === 'standings'" class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div class="space-y-3">
-        <div class="audit-panel p-4 sm:p-5">
-          <div class="flex flex-wrap items-start justify-between gap-2">
+    <!-- Standings -->
+    <section v-if="activeTab === 'standings'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div class="space-y-4">
+        <div class="rounded-2xl bg-surface-container-lowest p-5 shadow-sm sm:p-6">
+          <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <p class="font-label-caps text-on-surface-variant">
                 {{ standingsLga || "Ogun State" }}
               </p>
-              <h2 class="mt-1 text-base font-semibold text-white">
+              <h2 class="mt-1 font-headline-md text-xl font-bold text-primary">
                 {{ standingsLga ? "LGA party standings" : "State party standings" }}
               </h2>
             </div>
             <button
               v-if="standingsLga"
               type="button"
-              class="rounded-full border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-300"
+              class="rounded-xl bg-surface-container px-3 py-1.5 font-label-caps text-[11px] font-semibold text-primary transition hover:bg-surface-container-high"
               @click="standingsLga = ''"
             >
               All LGAs
             </button>
           </div>
 
-          <div class="mt-5 flex flex-col items-center gap-5 sm:flex-row sm:items-start">
+          <div class="mt-6 flex flex-col items-center gap-6 sm:flex-row sm:items-start">
             <div class="relative h-44 w-44 shrink-0 sm:h-48 sm:w-48">
-              <div class="h-full w-full rounded-full" :style="donutStyle" />
-              <div class="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-[#0e1624] text-center shadow-inner">
-                <p class="text-[10px] uppercase tracking-wider text-slate-500">Votes</p>
-                <p class="text-base font-bold text-white">{{ formatNum(scopedTotal) }}</p>
+              <div class="h-full w-full rounded-full shadow-inner" :style="donutStyle" />
+              <div
+                class="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-surface-container-lowest text-center shadow-sm ring-1 ring-outline-variant/20"
+              >
+                <p class="font-label-caps text-[10px] text-outline">Votes</p>
+                <p class="font-headline-md text-lg font-bold text-primary">{{ formatNum(scopedTotal) }}</p>
               </div>
             </div>
             <div class="min-w-0 flex-1">
-              <p class="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-left">Leading candidate</p>
-              <p class="mt-1 text-center text-xl font-semibold text-white sm:text-left">
+              <p class="text-center font-label-caps text-on-surface-variant sm:text-left">Leading candidate</p>
+              <p class="mt-1 text-center font-headline-md text-xl font-bold text-primary sm:text-left">
                 {{ leader ? displayName(leader) : "Awaiting party totals" }}
               </p>
-              <p class="mt-1 text-center text-sm text-slate-400 sm:text-left">
+              <p class="mt-1 text-center font-body-md text-sm text-on-surface-variant sm:text-left">
                 <span v-if="leader">
                   {{ leader.code }} · {{ leader.name }} · {{ formatNum(leader.votes) }} · {{ formatPct(leader.share, 1) }}
                 </span>
                 <span v-else>Select an LGA or wait for transcribed EC8A party boxes.</span>
               </p>
               <ul class="mt-4 space-y-2">
-                <li v-for="row in (donutLegend.length ? donutLegend : scopedStandings.slice(0, 6))" :key="`legend-${row.code}`" class="flex items-center gap-2 text-xs">
+                <li
+                  v-for="row in donutLegend.length ? donutLegend : scopedStandings.slice(0, 6)"
+                  :key="`legend-${row.code}`"
+                  class="flex items-center gap-2 text-sm"
+                >
                   <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ background: row.color }" />
-                  <span class="min-w-0 flex-1 truncate font-medium text-slate-200">{{ displayName(row) }}</span>
-                  <span class="tabular-nums text-slate-400">{{ formatPct(row.share, 1) }}</span>
+                  <span class="min-w-0 flex-1 truncate font-medium text-on-surface">{{ displayName(row) }}</span>
+                  <span class="tabular-nums text-outline">{{ formatPct(row.share, 1) }}</span>
                 </li>
               </ul>
             </div>
           </div>
         </div>
 
-        <div class="audit-panel p-4 sm:p-5">
-          <h3 class="text-sm font-semibold text-white">Votes bar chart</h3>
-          <p class="mt-1 text-[11px] text-slate-500">
+        <div class="rounded-2xl bg-surface-container-lowest p-5 shadow-sm sm:p-6">
+          <h3 class="font-headline-md text-lg font-bold text-primary">Vote share by party</h3>
+          <p class="mt-1 font-body-md text-sm text-on-surface-variant">
             {{ scopedStandings.length }} parties
             <span v-if="standingsLga"> in {{ standingsLga }}</span>
           </p>
-          <div class="mt-4 space-y-3">
-            <div v-for="row in scopedStandings" :key="`bar-${row.code}`" class="grid grid-cols-[4.5rem_1fr] items-center gap-2 sm:grid-cols-[7.5rem_1fr]">
+          <div class="mt-5 space-y-4">
+            <div
+              v-for="row in scopedStandings"
+              :key="`bar-${row.code}`"
+              class="grid grid-cols-[4.5rem_1fr] items-center gap-3 sm:grid-cols-[7.5rem_1fr]"
+            >
               <div class="min-w-0 text-right">
                 <p class="truncate text-[11px] font-bold" :style="{ color: row.color }">{{ row.code }}</p>
-                <p class="hidden truncate text-[10px] text-slate-500 sm:block">{{ displayName(row) }}</p>
+                <p class="hidden truncate text-[10px] text-outline sm:block">{{ displayName(row) }}</p>
               </div>
               <div>
-                <div class="h-3 overflow-hidden rounded-full bg-slate-800 sm:h-3.5">
+                <div class="h-3 overflow-hidden rounded-full bg-surface-container-high sm:h-3.5">
                   <div
-                    class="h-full rounded-full"
+                    class="h-full rounded-full transition-all duration-500"
                     :style="{ width: `${(row.votes / barMax) * 100}%`, background: row.color }"
                   />
                 </div>
-                <p class="mt-0.5 truncate text-[10px] text-slate-500 sm:hidden">{{ displayName(row) }} · {{ formatNum(row.votes) }}</p>
+                <p class="mt-0.5 truncate text-[10px] text-outline sm:hidden">
+                  {{ displayName(row) }} · {{ formatNum(row.votes) }}
+                </p>
               </div>
             </div>
           </div>
@@ -594,161 +664,211 @@ onMounted(() => {
           <article
             v-for="(row, index) in scopedStandings"
             :key="row.code"
-            class="rounded-2xl border border-white/5 bg-[#101826] px-3 py-2.5"
+            class="rounded-2xl bg-surface-container-lowest px-4 py-3 shadow-sm"
           >
             <div class="flex items-center gap-3">
-              <span class="w-5 text-xs font-bold text-slate-500">{{ index + 1 }}</span>
-              <span class="min-w-[3.1rem] rounded-md px-1.5 py-1 text-center text-[11px] font-black text-slate-950" :style="{ background: row.color }">
+              <span class="w-5 font-label-caps text-xs font-bold text-outline">{{ index + 1 }}</span>
+              <span
+                class="min-w-[3.1rem] rounded-md px-1.5 py-1 text-center text-[11px] font-black text-pure-white"
+                :style="{ background: row.color }"
+              >
                 {{ row.code }}
               </span>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium text-white">{{ displayName(row) }}</p>
-                <p class="truncate text-[11px] text-slate-500">{{ row.name }}</p>
+                <p class="truncate font-button-text text-sm font-semibold text-on-surface">{{ displayName(row) }}</p>
+                <p class="truncate text-[11px] text-outline">{{ row.name }}</p>
               </div>
               <div class="text-right">
-                <p class="text-sm font-bold tabular-nums text-white">{{ formatNum(row.votes) }}</p>
-                <p class="text-[11px] text-slate-500">{{ formatPct(row.share, 1) }}</p>
+                <p class="text-sm font-bold tabular-nums text-primary">{{ formatNum(row.votes) }}</p>
+                <p class="text-[11px] text-outline">{{ formatPct(row.share, 1) }}</p>
               </div>
             </div>
-            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
-              <div class="h-full rounded-full" :style="{ width: `${(row.votes / barMax) * 100}%`, background: row.color }" />
+            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-container-high">
+              <div
+                class="h-full rounded-full"
+                :style="{ width: `${(row.votes / barMax) * 100}%`, background: row.color }"
+              />
             </div>
           </article>
         </div>
       </div>
 
-      <aside class="audit-panel overflow-hidden">
-        <div class="border-b border-white/5 px-4 py-3">
-          <h2 class="text-sm font-semibold text-white">Local governments</h2>
-          <p class="text-[11px] text-slate-500">Tap an LGA to load its pie and bar charts</p>
-          <input
-            v-model="lgaQuery"
-            type="search"
-            placeholder="Search LGA"
-            class="audit-input mt-3"
-          />
+      <aside class="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm">
+        <div class="border-b border-outline-variant/20 px-4 py-4">
+          <h2 class="font-headline-md text-lg font-bold text-primary">Local governments</h2>
+          <p class="mt-0.5 font-body-md text-sm text-on-surface-variant">Tap an LGA to scope standings</p>
+          <div class="relative mt-3">
+            <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline">
+              search
+            </span>
+            <input
+              v-model="lgaQuery"
+              type="search"
+              placeholder="Search LGA"
+              class="h-11 w-full rounded-xl border-0 bg-surface-container-low pl-10 pr-3 font-body-md text-sm text-on-surface outline-none ring-1 ring-outline-variant/30 placeholder:text-outline focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
         </div>
         <div class="lg:max-h-[70vh] lg:overflow-y-auto lg:overscroll-contain">
           <button
             type="button"
-            class="flex min-h-12 w-full items-center justify-between gap-3 border-b border-white/5 px-4 py-3 text-left"
-            :class="!standingsLga ? 'bg-emerald-500/10' : 'active:bg-white/5'"
+            class="flex min-h-12 w-full items-center justify-between gap-3 border-b border-outline-variant/15 px-4 py-3 text-left transition"
+            :class="!standingsLga ? 'bg-action-green/10' : 'hover:bg-surface-container-low'"
             @click="standingsLga = ''"
           >
             <div>
-              <p class="text-sm font-medium text-white">All Ogun State</p>
-              <p class="text-[11px] text-slate-500">Statewide totals</p>
+              <p class="font-button-text text-sm font-semibold text-on-surface">All Ogun State</p>
+              <p class="text-[11px] text-outline">Statewide totals</p>
             </div>
           </button>
           <div
             v-for="row in filteredLgas"
             :key="row.name"
-            class="flex min-h-12 w-full items-center justify-between gap-3 border-b border-white/5 px-4 py-3"
-            :class="standingsLga === row.name ? 'bg-emerald-500/10' : ''"
+            class="flex min-h-12 w-full items-center justify-between gap-3 border-b border-outline-variant/15 px-4 py-3"
+            :class="standingsLga === row.name ? 'bg-action-green/10' : ''"
           >
             <button type="button" class="min-w-0 flex-1 text-left" @click="selectStandingLga(row.name)">
-              <p class="truncate text-sm font-medium text-slate-100">{{ row.name }}</p>
-              <p class="text-[11px] text-slate-500">{{ row.uploaded }}/{{ row.pu_total }} PUs · {{ formatNum(row.total_votes) }} votes</p>
+              <p class="truncate font-button-text text-sm font-semibold text-on-surface">{{ row.name }}</p>
+              <p class="text-[11px] text-outline">
+                {{ row.uploaded }}/{{ row.pu_total }} PUs · {{ formatNum(row.total_votes) }} votes
+              </p>
             </button>
             <div class="flex shrink-0 flex-col items-end gap-1">
               <span
-                class="rounded-full px-2 py-0.5 text-[11px] font-bold"
-                :class="row.progress_pct >= 100 ? 'bg-emerald-500/15 text-[#4ade80]' : 'bg-amber-500/15 text-amber-300'"
+                class="rounded-full px-2 py-0.5 font-label-caps text-[10px] font-bold"
+                :class="
+                  row.progress_pct >= 100
+                    ? 'bg-action-green/15 text-deep-navy'
+                    : 'bg-secondary-fixed text-on-secondary-fixed'
+                "
               >
                 {{ formatPct(row.progress_pct) }}
               </span>
               <button
                 type="button"
-                class="text-[10px] font-semibold text-sky-300"
+                class="font-label-caps text-[10px] font-semibold text-electric-pink hover:underline"
                 @click="openLgaInExplorer(row.name)"
               >
-                Explorer
+                Explorer →
               </button>
             </div>
           </div>
-          <p v-if="!filteredLgas.length" class="px-4 py-8 text-center text-sm text-slate-500">No matching LGA.</p>
+          <p v-if="!filteredLgas.length" class="px-4 py-8 text-center text-sm text-outline">No matching LGA.</p>
         </div>
       </aside>
     </section>
 
-    <section v-else-if="activeTab === 'explorer'" class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
-      <div class="space-y-3">
-        <div class="audit-panel p-4">
-          <label class="audit-kicker">Local government</label>
-          <select v-model="selectedLga" class="audit-input mt-2">
+    <!-- Explorer -->
+    <section v-else-if="activeTab === 'explorer'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+      <div class="space-y-4">
+        <div class="rounded-2xl bg-surface-container-lowest p-5 shadow-sm">
+          <label class="font-label-caps text-on-surface-variant">Local government</label>
+          <select
+            v-model="selectedLga"
+            class="mt-2 h-11 w-full rounded-xl border-0 bg-surface-container-low px-3 font-body-md text-sm text-on-surface outline-none ring-1 ring-outline-variant/30 focus:ring-2 focus:ring-primary/30"
+          >
             <option v-for="row in board?.lgas ?? []" :key="row.name" :value="row.name">
               {{ row.name }} · {{ formatPct(row.progress_pct) }}
             </option>
           </select>
-          <p class="mt-2 text-[11px] text-slate-500">
+          <p class="mt-2 font-body-md text-xs text-outline">
             {{ explorer?.uploaded ?? 0 }} of {{ explorer?.pu_total ?? selectedLgaMeta?.pu_total ?? 0 }} PUs uploaded
           </p>
-          <div class="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div class="mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <button
               v-for="ward in explorer?.wards ?? []"
               :key="ward.name"
               type="button"
-              class="shrink-0 rounded-full border px-3 py-2 text-xs font-semibold"
-              :class="selectedWard === ward.name ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' : 'border-white/10 text-slate-300'"
+              class="shrink-0 rounded-xl px-3 py-2 font-button-text text-xs font-semibold transition"
+              :class="
+                selectedWard === ward.name
+                  ? 'bg-primary text-pure-white'
+                  : 'bg-surface-container-low text-primary hover:bg-surface-container'
+              "
               @click="selectWard(ward.name)"
             >
               {{ ward.name }}
-              <span class="ml-1 text-[10px] opacity-70">{{ formatPct(ward.progress_pct) }}</span>
+              <span class="ml-1 opacity-70">{{ formatPct(ward.progress_pct) }}</span>
             </button>
           </div>
         </div>
 
-        <div class="audit-panel overflow-hidden">
-          <div class="flex flex-col gap-3 border-b border-white/5 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+        <div class="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm">
+          <div class="flex flex-col gap-3 border-b border-outline-variant/20 px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0">
-              <h2 class="truncate text-sm font-semibold text-white">{{ selectedWard || "Select a ward" }}</h2>
-              <p class="text-[11px] text-slate-500">
+              <h2 class="truncate font-headline-md text-lg font-bold text-primary">
+                {{ selectedWard || "Select a ward" }}
+              </h2>
+              <p class="text-[11px] text-outline">
                 {{ selectedWardMeta?.uploaded ?? 0 }}/{{ selectedWardMeta?.pu_total ?? 0 }} uploaded
               </p>
             </div>
-            <input v-model="puQuery" type="search" placeholder="Search PU" class="audit-input sm:max-w-[12rem]" />
+            <div class="relative w-full sm:max-w-[12rem]">
+              <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline">
+                search
+              </span>
+              <input
+                v-model="puQuery"
+                type="search"
+                placeholder="Search PU"
+                class="h-11 w-full rounded-xl border-0 bg-surface-container-low pl-10 pr-3 font-body-md text-sm text-on-surface outline-none ring-1 ring-outline-variant/30 focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
           </div>
           <div class="lg:max-h-[58vh] lg:overflow-y-auto lg:overscroll-contain">
             <button
               v-for="unit in wardUnits"
               :key="unit.code"
               type="button"
-              class="flex min-h-14 w-full items-center justify-between gap-3 border-b border-white/5 px-4 py-3 text-left"
-              :class="selectedUnit?.code === unit.code ? 'bg-emerald-500/10' : 'active:bg-white/5'"
+              class="flex min-h-14 w-full items-center justify-between gap-3 border-b border-outline-variant/15 px-4 py-3 text-left transition"
+              :class="selectedUnit?.code === unit.code ? 'bg-action-green/10' : 'hover:bg-surface-container-low'"
               @click="selectUnit(unit.code)"
             >
               <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-white">{{ unit.name }}</p>
-                <p class="text-[11px] text-slate-500">{{ unit.code }}</p>
+                <p class="truncate font-button-text text-sm font-semibold text-on-surface">{{ unit.name }}</p>
+                <p class="text-[11px] text-outline">{{ unit.code }}</p>
               </div>
               <span
-                class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
-                :class="unit.uploaded ? 'bg-emerald-500/15 text-[#4ade80]' : 'bg-slate-800 text-slate-400'"
+                class="shrink-0 rounded-full px-2 py-0.5 font-label-caps text-[10px] font-bold"
+                :class="
+                  unit.uploaded
+                    ? 'bg-action-green/15 text-deep-navy'
+                    : 'bg-surface-container-high text-outline'
+                "
               >
                 {{ unit.uploaded ? "Uploaded" : "Pending" }}
               </span>
             </button>
-            <p v-if="explorerLoading" class="px-4 py-8 text-center text-sm text-slate-500">Loading polling units…</p>
-            <p v-else-if="!wardUnits.length" class="px-4 py-8 text-center text-sm text-slate-500">No polling units in this ward.</p>
+            <p v-if="explorerLoading" class="px-4 py-8 text-center text-sm text-outline">Loading polling units…</p>
+            <p v-else-if="!wardUnits.length" class="px-4 py-8 text-center text-sm text-outline">
+              No polling units in this ward.
+            </p>
           </div>
         </div>
       </div>
 
       <aside class="audit-sheet" :class="sheetOpen ? 'audit-sheet-open' : ''">
         <div class="audit-sheet-backdrop lg:hidden" @click="closeSheet" />
-        <div class="audit-sheet-panel">
-          <div class="flex items-start justify-between gap-3 border-b border-white/5 px-4 py-3">
+        <div class="audit-sheet-panel overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm">
+          <div class="flex items-start justify-between gap-3 border-b border-outline-variant/20 px-4 py-4">
             <div class="min-w-0">
-              <p class="truncate text-sm font-semibold text-white">{{ selectedUnit?.name || "Select a polling unit" }}</p>
-              <p class="truncate text-[11px] text-slate-500">
+              <p class="truncate font-button-text text-sm font-semibold text-on-surface">
+                {{ selectedUnit?.name || "Select a polling unit" }}
+              </p>
+              <p class="truncate text-[11px] text-outline">
                 {{ selectedUnit?.code || "—" }} · {{ selectedWard || "—" }} · {{ selectedLga }}
               </p>
             </div>
-            <button type="button" class="rounded-full p-2 text-slate-400 lg:hidden" aria-label="Close" @click="closeSheet">
-              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            <button
+              type="button"
+              class="rounded-full p-2 text-outline transition hover:bg-surface-container lg:hidden"
+              aria-label="Close"
+              @click="closeSheet"
+            >
+              <span class="material-symbols-outlined text-[20px]">close</span>
             </button>
           </div>
-          <div class="relative flex h-48 items-center justify-center overflow-hidden bg-[#070b14] sm:h-56">
+          <div class="relative flex h-48 items-center justify-center overflow-hidden bg-surface-container sm:h-56">
             <img
               v-if="photoSrc(selectedUnit)"
               :src="photoSrc(selectedUnit)"
@@ -756,21 +876,42 @@ onMounted(() => {
               class="max-h-full max-w-full object-contain transition-transform"
               :style="{ transform: `scale(${zoom})` }"
             />
-            <p v-else class="px-6 text-center text-xs text-slate-500">No EC8A image uploaded for this unit yet.</p>
+            <p v-else class="px-6 text-center text-xs text-outline">No EC8A image uploaded for this unit yet.</p>
             <div class="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
-              <button type="button" class="audit-zoom" @click="zoom = Math.max(1, zoom - 0.25)">−</button>
-              <button type="button" class="audit-zoom" @click="zoom = Math.min(3, zoom + 0.25)">+</button>
-              <button type="button" class="audit-zoom" :disabled="!selectedUnit?.photo_url" @click="openOriginal(selectedUnit)">
+              <button
+                type="button"
+                class="min-w-[2.1rem] rounded-full bg-surface-container-lowest px-2.5 py-1 text-xs font-semibold text-primary shadow-sm"
+                @click="zoom = Math.max(1, zoom - 0.25)"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                class="min-w-[2.1rem] rounded-full bg-surface-container-lowest px-2.5 py-1 text-xs font-semibold text-primary shadow-sm"
+                @click="zoom = Math.min(3, zoom + 0.25)"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                class="rounded-full bg-surface-container-lowest px-2.5 py-1 text-xs font-semibold text-primary shadow-sm disabled:opacity-40"
+                :disabled="!selectedUnit?.photo_url"
+                @click="openOriginal(selectedUnit)"
+              >
                 Open
               </button>
             </div>
           </div>
-          <div class="px-4 py-3">
-            <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Transcribed results</h3>
-            <div class="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-4">
-              <div v-for="party in transcribedParties" :key="party.code" class="rounded-xl bg-[#0b1220] px-1 py-2 text-center">
+          <div class="px-4 py-4">
+            <h3 class="font-label-caps text-on-surface-variant">Transcribed results</h3>
+            <div class="mt-3 grid grid-cols-4 gap-2">
+              <div
+                v-for="party in transcribedParties"
+                :key="party.code"
+                class="rounded-xl bg-surface-container-low px-1 py-2 text-center"
+              >
                 <span class="block text-[10px] font-bold" :style="{ color: party.color }">{{ party.code }}</span>
-                <span class="mt-1 block text-xs font-semibold tabular-nums text-white">
+                <span class="mt-1 block text-xs font-semibold tabular-nums text-on-surface">
                   {{ selectedUnit?.party_votes[party.code] ?? 0 }}
                 </span>
               </div>
@@ -778,13 +919,19 @@ onMounted(() => {
             <div
               v-if="verification"
               class="mt-3 rounded-xl px-3 py-2 text-[11px] leading-relaxed"
-              :class="verification.ok ? 'bg-emerald-500/10 text-[#4ade80]' : 'bg-amber-500/10 text-amber-200'"
+              :class="
+                verification.ok
+                  ? 'bg-action-green/15 text-deep-navy'
+                  : 'bg-secondary-fixed/80 text-on-secondary-fixed'
+              "
             >
               <span v-if="verification.ok">
-                Sum matches Box #7 ({{ verification.box7 ?? verification.sum }}) and the bottom box ({{ verification.bottom }}).
+                Sum matches Box #7 ({{ verification.box7 ?? verification.sum }}) and the bottom box
+                ({{ verification.bottom }}).
               </span>
               <span v-else>
-                Party sum {{ verification.sum }}. Box #7 {{ verification.box7 ?? "—" }}. Bottom box {{ verification.bottom }}.
+                Party sum {{ verification.sum }}. Box #7 {{ verification.box7 ?? "—" }}. Bottom box
+                {{ verification.bottom }}.
               </span>
             </div>
           </div>
@@ -792,81 +939,130 @@ onMounted(() => {
       </aside>
     </section>
 
-    <section v-else class="mt-4 space-y-3">
-      <div class="audit-panel flex flex-wrap items-start justify-between gap-3 px-4 py-4">
+    <!-- Matrix -->
+    <section v-else class="space-y-4">
+      <div class="flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-surface-container-lowest px-5 py-5 shadow-sm">
         <div>
-          <h2 class="text-base font-semibold text-white">LGA collation matrix</h2>
-          <p class="mt-1 text-xs text-slate-500">Votes by party across {{ board?.lgas.length ?? 0 }} local governments.</p>
+          <h2 class="font-headline-md text-xl font-bold text-primary">LGA collation matrix</h2>
+          <p class="mt-1 font-body-md text-sm text-on-surface-variant">
+            Votes by party across {{ board?.lgas.length ?? 0 }} local governments.
+          </p>
         </div>
-        <button type="button" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200" @click="exportCsv">
+        <button
+          type="button"
+          class="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-4 font-button-text text-sm font-semibold text-pure-white shadow-sm transition hover:opacity-95"
+          @click="exportCsv"
+        >
+          <span class="material-symbols-outlined text-[18px]">download</span>
           Export CSV
         </button>
       </div>
 
       <div class="space-y-2 lg:hidden">
-        <article v-for="row in board?.lgas ?? []" :key="row.name" class="audit-panel overflow-hidden">
-          <button type="button" class="flex min-h-14 w-full items-start justify-between gap-3 px-4 py-3 text-left" @click="toggleMatrix(row.name)">
+        <article
+          v-for="row in board?.lgas ?? []"
+          :key="row.name"
+          class="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm"
+        >
+          <button
+            type="button"
+            class="flex min-h-14 w-full items-start justify-between gap-3 px-4 py-3 text-left"
+            @click="toggleMatrix(row.name)"
+          >
             <div class="min-w-0">
-              <p class="font-medium text-white">{{ row.name }}</p>
-              <p class="mt-0.5 text-[11px] text-slate-500">
-                {{ row.uploaded }}/{{ row.pu_total }} · {{ formatPct(row.progress_pct) }} · {{ formatNum(row.total_votes) }} votes
+              <p class="font-button-text font-semibold text-on-surface">{{ row.name }}</p>
+              <p class="mt-0.5 text-[11px] text-outline">
+                {{ row.uploaded }}/{{ row.pu_total }} · {{ formatPct(row.progress_pct) }} ·
+                {{ formatNum(row.total_votes) }} votes
               </p>
             </div>
             <span
-              class="mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
-              :class="row.clean ? 'bg-emerald-500/15 text-[#4ade80]' : row.uploaded ? 'bg-sky-500/15 text-sky-300' : 'bg-slate-800 text-slate-400'"
+              class="mt-0.5 shrink-0 rounded-full px-2 py-0.5 font-label-caps text-[10px] font-bold"
+              :class="
+                row.clean
+                  ? 'bg-action-green/15 text-deep-navy'
+                  : row.uploaded
+                    ? 'bg-secondary-fixed text-on-secondary-fixed'
+                    : 'bg-surface-container-high text-outline'
+              "
             >
               {{ row.clean ? "Clean" : row.uploaded ? "Verified" : "Pending" }}
             </span>
           </button>
-          <div v-if="expandedMatrix === row.name" class="border-t border-white/5 px-4 py-3">
+          <div v-if="expandedMatrix === row.name" class="border-t border-outline-variant/20 px-4 py-3">
             <div class="flex flex-wrap gap-2">
-              <span v-for="party in topParties(row, standingParties.length)" :key="party.code" class="rounded-lg bg-[#0b1220] px-2 py-1 text-[11px]">
+              <span
+                v-for="party in topParties(row, standingParties.length)"
+                :key="party.code"
+                class="rounded-lg bg-surface-container-low px-2 py-1 text-[11px]"
+              >
                 <span class="font-bold" :style="{ color: party.color }">{{ party.code }}</span>
-                <span class="ml-1 tabular-nums text-slate-300">{{ formatNum(party.votes) }}</span>
+                <span class="ml-1 tabular-nums text-on-surface-variant">{{ formatNum(party.votes) }}</span>
               </span>
             </div>
           </div>
         </article>
       </div>
 
-      <div class="audit-panel hidden overflow-hidden lg:block">
+      <div class="hidden overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm lg:block">
         <div class="overflow-x-auto">
           <table class="min-w-full text-left text-xs">
             <thead>
-              <tr class="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-500">
-                <th class="sticky left-0 bg-[#101826] px-3 py-3">LGA</th>
+              <tr class="border-b border-outline-variant/20 font-label-caps text-[10px] text-outline">
+                <th class="sticky left-0 bg-surface-container-lowest px-4 py-3">LGA</th>
                 <th class="px-3 py-3">Progress</th>
                 <th class="px-3 py-3">Status</th>
-                <th v-for="party in matrixParties" :key="party.code" class="px-2 py-3 text-right" :style="{ color: party.color }">
+                <th
+                  v-for="party in matrixParties"
+                  :key="party.code"
+                  class="px-2 py-3 text-right"
+                  :style="{ color: party.color }"
+                >
                   {{ party.code }}
                 </th>
-                <th class="px-3 py-3 text-right text-[#4ade80]">Total</th>
+                <th class="px-4 py-3 text-right text-action-green">Total</th>
               </tr>
             </thead>
             <tbody>
               <tr
                 v-for="(row, index) in board?.lgas ?? []"
                 :key="row.name"
-                class="border-b border-white/5"
-                :class="index % 2 ? 'bg-[#0d1524]' : 'bg-transparent'"
+                class="border-b border-outline-variant/10"
+                :class="index % 2 ? 'bg-surface-container-low/50' : 'bg-transparent'"
               >
-                <td class="sticky left-0 px-3 py-2 font-semibold text-slate-100" :class="index % 2 ? 'bg-[#0d1524]' : 'bg-[#101826]'">
+                <td
+                  class="sticky left-0 px-4 py-2.5 font-semibold text-on-surface"
+                  :class="index % 2 ? 'bg-surface-container-low/50' : 'bg-surface-container-lowest'"
+                >
                   {{ row.name }}
                 </td>
-                <td class="whitespace-nowrap px-3 py-2 text-slate-300">{{ row.uploaded }}/{{ row.pu_total }}</td>
-                <td class="px-3 py-2">
+                <td class="whitespace-nowrap px-3 py-2.5 text-on-surface-variant">
+                  {{ row.uploaded }}/{{ row.pu_total }}
+                </td>
+                <td class="px-3 py-2.5">
                   <span
-                    class="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                    :class="row.clean ? 'bg-emerald-500/15 text-[#4ade80]' : row.uploaded ? 'bg-sky-500/15 text-sky-300' : 'bg-slate-700 text-slate-400'"
+                    class="rounded-full px-2 py-0.5 font-label-caps text-[10px] font-bold"
+                    :class="
+                      row.clean
+                        ? 'bg-action-green/15 text-deep-navy'
+                        : row.uploaded
+                          ? 'bg-secondary-fixed text-on-secondary-fixed'
+                          : 'bg-surface-container-high text-outline'
+                    "
                   >
                     {{ row.clean ? "Clean" : row.uploaded ? "Verified" : "Pending" }}
                   </span>
                 </td>
-                <td v-for="party in matrixParties" :key="`${row.name}-${party.code}`" class="px-2 py-2 text-right tabular-nums text-slate-300">
+                <td
+                  v-for="party in matrixParties"
+                  :key="`${row.name}-${party.code}`"
+                  class="px-2 py-2.5 text-right tabular-nums text-on-surface-variant"
+                >
                   {{ formatNum(row.party_votes[party.code] || 0) }}
                 </td>
-                <td class="px-3 py-2 text-right font-bold tabular-nums text-[#4ade80]">{{ formatNum(row.total_votes) }}</td>
+                <td class="px-4 py-2.5 text-right font-bold tabular-nums text-primary">
+                  {{ formatNum(row.total_votes) }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -874,20 +1070,21 @@ onMounted(() => {
       </div>
     </section>
 
+    <!-- Mobile bottom nav (standalone page only) -->
     <nav
       v-if="!embedded"
-      class="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1 border-t border-white/10 bg-[#070b14]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-lg lg:hidden"
+      class="fixed inset-x-0 bottom-0 z-40 grid grid-cols-3 gap-1 border-t border-outline-variant/20 bg-surface-container-lowest/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-lg lg:hidden"
       aria-label="Audit views"
     >
       <button
         v-for="tab in tabs"
         :key="tab.id"
         type="button"
-        class="flex min-h-12 flex-col items-center justify-center gap-1 text-[11px] font-bold uppercase tracking-wide"
-        :class="activeTab === tab.id ? 'text-[#4ade80]' : 'text-slate-400'"
+        class="flex min-h-12 flex-col items-center justify-center gap-0.5 font-label-caps text-[10px] font-bold"
+        :class="activeTab === tab.id ? 'text-primary' : 'text-outline'"
         @click="activeTab = tab.id"
       >
-        <span class="h-1 w-8 rounded-full" :class="activeTab === tab.id ? 'bg-[#4ade80]' : 'bg-transparent'" />
+        <span class="material-symbols-outlined text-[20px]">{{ tab.icon }}</span>
         {{ tab.label }}
       </button>
     </nav>
@@ -895,118 +1092,8 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.audit-dash {
-  min-height: 100%;
-  background:
-    radial-gradient(1200px 400px at 10% -10%, rgb(16 185 129 / 0.12), transparent 50%),
-    #070b14;
-  color: #e2e8f0;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-}
-.audit-page {
-  padding: 0.85rem 0.85rem calc(5.75rem + env(safe-area-inset-bottom));
-}
-@media (min-width: 1024px) {
-  .audit-page {
-    padding-bottom: 1.5rem;
-  }
-}
-.audit-embedded {
-  padding: 0.5rem 0 1rem;
-}
-.audit-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  margin: -0.85rem -0.85rem 0;
-  padding: 0.85rem;
-  background: rgb(7 11 20 / 0.92);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgb(255 255 255 / 0.06);
-}
-.audit-embedded .audit-header {
-  margin: 0;
-  position: relative;
-  background: transparent;
-  border-bottom: 0;
-  padding: 0 0 0.75rem;
-}
-.audit-banner {
-  margin-top: 0.85rem;
-  border-radius: 1rem;
-  border: 1px solid rgb(56 189 248 / 0.18);
-  background: rgb(8 47 73 / 0.35);
-  padding: 0.7rem 0.9rem;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: rgb(186 230 253 / 0.9);
-}
-.audit-stat,
-.audit-panel {
-  border: 1px solid rgb(255 255 255 / 0.07);
-  background: rgb(16 24 38 / 0.92);
-  border-radius: 1.1rem;
-}
-.audit-stat {
-  padding: 0.7rem 0.75rem;
-}
-.audit-kicker {
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #94a3b8;
-}
-.audit-metric {
-  margin-top: 0.2rem;
-  font-size: 1.2rem;
-  line-height: 1.1;
-  font-weight: 800;
-  color: #fff;
-}
-@media (min-width: 640px) {
-  .audit-metric {
-    font-size: 1.6rem;
-  }
-}
-.audit-sub {
-  margin-top: 0.25rem;
-  font-size: 11px;
-  color: #64748b;
-}
-.audit-input {
-  width: 100%;
-  min-height: 2.75rem;
-  border-radius: 0.9rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  background: #0b1220;
-  padding: 0.55rem 0.8rem;
-  font-size: 16px;
-  color: #fff;
-}
-.audit-zoom {
-  border-radius: 999px;
-  border: 1px solid rgb(51 65 85);
-  background: rgb(15 23 42 / 0.92);
-  min-width: 2.1rem;
-  padding: 0.25rem 0.55rem;
-  font-size: 12px;
-  color: #cbd5e1;
-}
-.audit-zoom:disabled {
-  opacity: 0.4;
-}
 .audit-sheet-backdrop {
   display: none;
-}
-.audit-sheet-panel {
-  border: 1px solid rgb(255 255 255 / 0.07);
-  background: rgb(16 24 38 / 0.96);
-  border-radius: 1.1rem;
-  overflow: hidden;
 }
 @media (max-width: 1023px) {
   .audit-sheet-panel {
@@ -1022,7 +1109,7 @@ onMounted(() => {
     display: block;
     position: absolute;
     inset: 0;
-    background: rgb(0 0 0 / 0.55);
+    background: rgb(34 34 48 / 0.45);
   }
   .audit-sheet-open .audit-sheet-panel {
     display: block;

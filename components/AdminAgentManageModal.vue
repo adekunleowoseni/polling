@@ -121,7 +121,12 @@
           </section>
 
           <section class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-4">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">State / LGA / ward assignment</h3>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">
+              Turf / polling unit assignment
+            </h3>
+            <p class="mt-1 text-[11px] text-ui-muted">
+              Agents are assigned by LGA and ward. Polling units are registered under that turf for live feeds.
+            </p>
             <div class="mt-3 flex flex-wrap items-end gap-3">
               <label class="min-w-[140px] flex-1">
                 <span class="text-[10px] uppercase text-ui-muted">State</span>
@@ -157,7 +162,7 @@
                 :disabled="!editState || !editLga || !editWard || saving"
                 @click="saveAssignment"
               >
-                {{ saving ? "Saving…" : "Save assignment" }}
+                {{ saving ? "Saving…" : "Save turf assignment" }}
               </button>
             </div>
           </section>

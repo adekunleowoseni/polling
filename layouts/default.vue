@@ -1,13 +1,12 @@
 <template>
-  <div class="min-h-screen bg-ui-bg text-ui-text">
-    <header class="ui-section-header backdrop-blur">
-      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
+  <div class="min-h-screen bg-background font-body-md text-on-surface">
+    <header class="sticky top-0 z-40 border-b border-outline-variant/80 bg-surface/90 backdrop-blur-xl">
+      <div class="mx-auto flex max-w-container-max flex-wrap items-center justify-between gap-4 px-margin-mobile py-3 lg:px-gutter">
         <NuxtLink to="/" class="flex min-w-0 items-center gap-3">
-          <BrandLogos size="sm" :show-divider="false" />
-          <div class="min-w-0 border-l border-ui-border/50 pl-3">
-            <p class="truncate text-sm font-semibold leading-tight">Ogun State Monitor</p>
-            <p class="truncate text-xs text-ui-muted">Live polling unit activity</p>
-          </div>
+          <BrandMark size="sm" />
+          <p class="hidden truncate font-label-caps text-[10px] uppercase tracking-wider text-on-surface-variant sm:block">
+            Live polling unit activity
+          </p>
         </NuxtLink>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -18,6 +17,13 @@
               :class="{ 'ui-nav-link-active': route.path === '/' }"
             >
               Home
+            </NuxtLink>
+            <NuxtLink
+              to="/live-monitoring"
+              class="ui-nav-link"
+              active-class="ui-nav-link-active"
+            >
+              Live Monitoring
             </NuxtLink>
             <NuxtLink
               to="/monitor"
@@ -88,11 +94,13 @@
       <slot />
     </main>
 
-    <footer class="mt-auto border-t border-ui-border/50 bg-ui-surface/30 py-6">
-      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 sm:px-6">
-        <BrandLogos size="sm" />
-        <p class="text-xs text-ui-muted">
-          Ogun State election monitoring · Powered by live field agents
+    <footer class="mt-auto border-t border-outline-variant bg-deep-navy py-6 text-on-navy">
+      <div class="mx-auto flex max-w-container-max flex-wrap items-center justify-between gap-4 px-margin-mobile lg:px-gutter">
+        <div class="flex items-center gap-3">
+          <BrandMark size="sm" name-class="text-pure-white" />
+        </div>
+        <p class="font-label-caps text-[11px] uppercase tracking-wider text-on-primary-container">
+          Live field monitoring · 99.99% uptime
         </p>
       </div>
     </footer>

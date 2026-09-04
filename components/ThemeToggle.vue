@@ -1,7 +1,7 @@
 <template>
   <button
     type="button"
-    class="inline-flex items-center gap-2 rounded-lg border border-ui px-2.5 py-2 text-sm text-ui-muted transition hover:bg-ui-muted/10 hover:text-ui"
+    class="inline-flex items-center gap-2 rounded-full border border-outline-variant px-2.5 py-2 text-sm text-on-surface-variant transition hover:bg-secondary-fixed hover:text-electric-pink"
     :aria-label="isDark ? 'Switch to light theme' : 'Switch to dark theme'"
     @click="toggleTheme"
   >

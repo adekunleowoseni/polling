@@ -4,9 +4,64 @@ export type Admin = {
   email: string;
   role: string;
   state?: string | null;
+  org_id?: string | null;
+  org_name?: string | null;
+  org_role?: string | null;
   allowed_tabs?: string[];
   created_at: string;
 };
+
+/** Keep in sync with backend `admin_bootstrap` tab tuples. */
+export const STATE_ADMIN_NAV_TABS = [
+  "overview",
+  "feeds",
+  "snaps",
+  "recordings",
+  "agents",
+  "sms-analytics",
+  "votes",
+  "disbursements",
+  "chapters",
+  "packages",
+  "inbox",
+  "audit",
+  "parties",
+] as const;
+
+export const SUPER_ADMIN_NAV_TABS = [
+  ...STATE_ADMIN_NAV_TABS,
+  "payment-gateways",
+  "data",
+  "airtime",
+  "organizations",
+] as const;
+
+export const ORG_ADMIN_NAV_TABS = [
+  "overview",
+  "feeds",
+  "snaps",
+  "recordings",
+  "agents",
+  "sms-analytics",
+  "votes",
+  "disbursements",
+  "packages",
+  "inbox",
+  "audit",
+  "parties",
+  "org-users",
+] as const;
+
+export const ORG_OPERATOR_NAV_TABS = [
+  "overview",
+  "feeds",
+  "snaps",
+  "recordings",
+  "agents",
+  "votes",
+  "inbox",
+  "audit",
+] as const;
 
 export type AdminOverview = {
   live_feeds: number;
@@ -95,15 +150,16 @@ export function useAdminAuth() {
   }
 
   function canAccessTab(tabId: string) {
-    const allowed = admin.value?.allowed_tabs;
-    if (!allowed || allowed.length === 0) {
-      // Legacy sessions without allowed_tabs: super keeps all, state uses defaults
-      if (admin.value?.role === "state_admin") {
-        return ["overview", "feeds", "snaps", "recordings", "agents", "votes", "disbursements", "packages", "inbox", "audit", "parties"].includes(tabId);
-      }
-      return true;
-    }
-    return allowed.includes(tabId);
+    if (!admin.value) return false;
+    // Role defaults are authoritative so newly shipped tabs appear even with a
+    // stale localStorage /me payload that predates the tab.
+    const roleTabs =
+      admin.value.role === "state_admin"
+        ? (STATE_ADMIN_NAV_TABS as readonly string[])
+        : (SUPER_ADMIN_NAV_TABS as readonly string[]);
+    if (roleTabs.includes(tabId)) return true;
+    const allowed = admin.value.allowed_tabs;
+    return !!allowed?.includes(tabId);
   }
 
   function requireAdmin(next = "/admin/dashboard") {

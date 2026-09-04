@@ -9,19 +9,25 @@ function applyTheme(mode: ThemeMode) {
 }
 
 function readStoredTheme(): ThemeMode {
-  if (!import.meta.client) return "dark";
+  if (!import.meta.client) return "light";
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === "light" || stored === "dark") return stored;
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export function useTheme() {
-  const theme = useState<ThemeMode>("theme", () => "dark");
+function readDomTheme(): ThemeMode {
+  if (!import.meta.client) return "light";
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
 
-  onMounted(() => {
-    theme.value = readStoredTheme();
-    applyTheme(theme.value);
-  });
+export function useTheme() {
+  const theme = useState<ThemeMode>("theme", () => "light");
+
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      theme.value = readDomTheme();
+    });
+  }
 
   const isDark = computed(() => theme.value === "dark");
 
@@ -31,7 +37,7 @@ export function useTheme() {
   }
 
   function toggleTheme() {
-    setTheme(theme.value === "dark" ? "light" : "dark");
+    setTheme(readDomTheme() === "dark" ? "light" : "dark");
   }
 
   return { theme, isDark, setTheme, toggleTheme };
@@ -39,5 +45,8 @@ export function useTheme() {
 
 export function initThemeFromStorage() {
   if (!import.meta.client) return;
-  applyTheme(readStoredTheme());
+  const mode = readStoredTheme();
+  const theme = useState<ThemeMode>("theme", () => mode);
+  theme.value = mode;
+  applyTheme(mode);
 }

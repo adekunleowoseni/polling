@@ -45,47 +45,47 @@
         </div>
       </section>
 
-      <div v-if="loading && !data" class="py-16 text-center text-slate-500">Loading live feeds…</div>
+      <div v-if="loading && !data" class="py-16 text-center text-ui-muted">Loading live feeds…</div>
 
-      <div v-else-if="!liveUnits.length" class="rounded-2xl border border-dashed border-white/10 p-12 text-center">
-        <p class="text-slate-400">No live polling unit feeds right now.</p>
-        <p class="mt-2 text-sm text-slate-500">
+      <div v-else-if="!liveUnits.length" class="rounded-2xl border border-dashed border-outline-variant p-12 text-center">
+        <p class="text-on-surface-variant">No live polling unit feeds right now.</p>
+        <p class="mt-2 text-sm text-ui-muted">
           Feeds appear here when agents start streaming from registered units.
         </p>
       </div>
 
       <!-- LGA cards -->
       <section v-else-if="!selectedLga">
-        <h2 class="mb-4 text-lg font-semibold text-white">Local Government Areas</h2>
-        <p class="mb-6 text-sm text-slate-500">Select an LGA to view active ward feeds.</p>
+        <h2 class="mb-4 text-lg font-semibold text-ui-text">Local Government Areas</h2>
+        <p class="mb-6 text-sm text-ui-muted">Select an LGA to view active ward feeds.</p>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <button
             v-for="lga in lgaSummaries"
             :key="lga.lga"
             type="button"
-            class="group rounded-2xl border border-white/10 bg-slate-900/80 p-6 text-left transition hover:border-sky-500/40 hover:bg-slate-900 hover:shadow-lg hover:shadow-sky-950/20"
+            class="group ui-card p-6 text-left transition hover:border-electric-pink/40 hover:shadow-lg"
             @click="openLga(lga.lga)"
           >
             <div class="flex items-start justify-between gap-3">
               <div>
-                <p class="text-xs uppercase tracking-wider text-slate-500">LGA</p>
-                <h3 class="mt-1 text-xl font-semibold text-white group-hover:text-sky-300">{{ lga.lga }}</h3>
+                <p class="text-xs uppercase tracking-wider text-ui-muted">LGA</p>
+                <h3 class="mt-1 text-xl font-semibold text-ui-text group-hover:text-electric-pink">{{ lga.lga }}</h3>
               </div>
-              <span class="rounded-full bg-red-600/20 px-2 py-0.5 text-xs font-semibold text-red-400">
+              <span class="rounded-full bg-red-600/20 px-2 py-0.5 text-xs font-semibold text-red-500 dark:text-red-400">
                 {{ lga.liveUnits }} live
               </span>
             </div>
             <dl class="mt-5 grid grid-cols-2 gap-3 text-sm">
               <div>
-                <dt class="text-slate-500">Active wards</dt>
-                <dd class="mt-0.5 text-lg font-semibold text-white">{{ lga.activeWards }}</dd>
+                <dt class="text-ui-muted">Active wards</dt>
+                <dd class="mt-0.5 text-lg font-semibold text-ui-text">{{ lga.activeWards }}</dd>
               </div>
               <div>
-                <dt class="text-slate-500">People on site</dt>
-                <dd class="mt-0.5 text-lg font-semibold text-emerald-400">{{ lga.totalPeople }}</dd>
+                <dt class="text-ui-muted">People on site</dt>
+                <dd class="mt-0.5 text-lg font-semibold text-action-green">{{ lga.totalPeople }}</dd>
               </div>
             </dl>
-            <p class="mt-4 text-xs text-sky-400 group-hover:underline">View ward feeds →</p>
+            <p class="mt-4 text-xs text-electric-pink group-hover:underline">View ward feeds →</p>
           </button>
         </div>
       </section>
@@ -94,14 +94,14 @@
       <section v-else>
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 class="text-lg font-semibold text-white">{{ selectedLga }}</h2>
-            <p class="text-sm text-slate-500">
+            <h2 class="text-lg font-semibold text-ui-text">{{ selectedLga }}</h2>
+            <p class="text-sm text-ui-muted">
               {{ wardSummaries.length }} active ward(s) · {{ lgaLiveCount }} live feed(s)
             </p>
           </div>
           <button
             type="button"
-            class="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300 hover:bg-white/5"
+            class="rounded-lg border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container-low"
             @click="goToLgas"
           >
             ← Back to LGAs
@@ -124,7 +124,7 @@
                 <button
                   v-if="snapsForWard(ward.ward).length"
                   type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-300 hover:bg-sky-500/20"
+                  class="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-500/20 dark:text-sky-300"
                   @click="openGallery(ward.ward)"
                 >
                   <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,7 +163,7 @@
                 v-for="(snap, idx) in snapsForWard(ward.ward).slice(0, 3)"
                 :key="snap.id"
                 type="button"
-                class="overflow-hidden rounded border border-white/10 hover:border-sky-400/50"
+                class="overflow-hidden rounded border border-outline-variant hover:border-electric-pink/50"
                 @click="openGallery(ward.ward, idx)"
               >
                 <img
@@ -218,11 +218,11 @@
 
           <footer
             v-if="ward.units.length > 1"
-            class="border-t border-white/10 px-3 py-2"
+            class="border-t border-outline-variant px-3 py-2"
           >
             <button
               type="button"
-              class="w-full rounded-lg border border-white/10 py-1.5 text-xs text-sky-300 hover:bg-white/5"
+              class="w-full rounded-lg border border-outline-variant py-1.5 text-xs text-electric-pink hover:bg-surface-container-low"
               @click="openFullscreen(ward.units, 0)"
             >
               View all {{ ward.units.length }} feeds fullscreen
