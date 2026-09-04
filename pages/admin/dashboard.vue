@@ -2,7 +2,7 @@
   <div class="flex w-full flex-col">
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6 md:p-8">
     <header
-      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'chapters' && activeTab !== 'payment-gateways' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds'"
+      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'chapters' && activeTab !== 'payment-gateways' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds' && activeTab !== 'organizations' && activeTab !== 'org-users' && activeTab !== 'audit'"
       class="flex flex-col gap-4 pb-2 lg:flex-row lg:items-center lg:justify-between"
     >
       <div class="min-w-0 flex-1 flex flex-col gap-1.5">
