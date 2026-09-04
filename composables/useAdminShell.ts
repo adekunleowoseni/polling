@@ -52,6 +52,8 @@ export const ADMIN_NAV_GROUPS = [
     label: "System",
     items: [
       { id: "audit", label: "Telemetry & Security", icon: "verified_user" },
+      { id: "organizations", label: "Organizations (SaaS)", icon: "apartment" },
+      { id: "org-users", label: "Org Users & Roles", icon: "manage_accounts" },
       { id: "payment-gateways", label: "Payment Gateways", icon: "payments" },
       { id: "data", label: "Data Plans", icon: "sim_card" },
       { id: "airtime", label: "Airtime", icon: "phone_iphone" },

@@ -151,15 +151,19 @@ export function useAdminAuth() {
 
   function canAccessTab(tabId: string) {
     if (!admin.value) return false;
-    // Role defaults are authoritative so newly shipped tabs appear even with a
-    // stale localStorage /me payload that predates the tab.
+    const role = admin.value.role || "super_admin";
+    if (role === "org_owner" || role === "org_admin") {
+      return (ORG_ADMIN_NAV_TABS as readonly string[]).includes(tabId) || !!admin.value.allowed_tabs?.includes(tabId);
+    }
+    if (role === "org_operator") {
+      return (ORG_OPERATOR_NAV_TABS as readonly string[]).includes(tabId) || !!admin.value.allowed_tabs?.includes(tabId);
+    }
     const roleTabs =
-      admin.value.role === "state_admin"
+      role === "state_admin"
         ? (STATE_ADMIN_NAV_TABS as readonly string[])
         : (SUPER_ADMIN_NAV_TABS as readonly string[]);
     if (roleTabs.includes(tabId)) return true;
-    const allowed = admin.value.allowed_tabs;
-    return !!allowed?.includes(tabId);
+    return !!admin.value.allowed_tabs?.includes(tabId);
   }
 
   function requireAdmin(next = "/admin/dashboard") {
@@ -181,6 +185,7 @@ export function useAdminAuth() {
     ready,
     authHeaders,
     login,
+    persistSession: persist,
     refreshMe,
     canAccessTab,
     clear,
