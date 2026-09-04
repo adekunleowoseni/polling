@@ -596,11 +596,7 @@ function slugify(value: string) {
 }
 
 function onLegalNameInput() {
-  if (!form.slug || form.slug === slugify(form.legal_name.slice(0, -1))) {
-    form.slug = slugify(form.legal_name);
-  } else if (!form.slug) {
-    form.slug = slugify(form.legal_name);
-  }
+  form.slug = slugify(form.legal_name);
   void checkSlug();
 }
 

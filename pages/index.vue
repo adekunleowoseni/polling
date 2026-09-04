@@ -39,10 +39,16 @@
         <!-- Actions -->
         <div class="relative z-10 flex shrink-0 items-center justify-end gap-2 sm:gap-3">
           <NuxtLink
-            to="/agent/login"
+            to="/admin/login"
             class="hidden h-9 items-center px-2 font-button-text text-sm text-on-surface-variant transition-colors hover:text-on-surface md:inline-flex"
           >
             Log in
+          </NuxtLink>
+          <NuxtLink
+            to="/register"
+            class="hidden h-9 items-center px-2 font-button-text text-sm text-on-surface-variant transition-colors hover:text-on-surface lg:inline-flex"
+          >
+            Register org
           </NuxtLink>
           <a
             href="#demo"

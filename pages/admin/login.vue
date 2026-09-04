@@ -289,10 +289,14 @@
                 class="mt-8 flex flex-col items-center justify-between gap-4 border-t border-surface-container pt-6 sm:flex-row"
               >
                 <p class="font-body-md text-body-md text-on-surface-variant">
-                  Need authorized credential?
-                  <NuxtLink to="/agent/login" class="font-semibold text-secondary hover:underline">
-                    Register as field agent
-                  </NuxtLink>
+              Need authorized credential?
+              <NuxtLink to="/register" class="font-semibold text-secondary hover:underline">
+                Register organization
+              </NuxtLink>
+              <span class="text-outline"> · </span>
+              <NuxtLink to="/agent/login" class="font-semibold text-secondary hover:underline">
+                Field agent
+              </NuxtLink>
                 </p>
                 <div class="flex items-center gap-2 font-label-caps text-label-caps text-on-surface-variant">
                   <span class="material-symbols-outlined text-[16px] text-action-green">encrypted</span>

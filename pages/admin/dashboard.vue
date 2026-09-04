@@ -637,6 +637,20 @@
       <IndependentAuditPanel :api-base="apiBase" embedded />
     </section>
 
+    <section v-else-if="activeTab === 'organizations'">
+      <AdminOrganizationsPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
+    </section>
+
+    <section v-else-if="activeTab === 'org-users'">
+      <AdminOrgUsersPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
+    </section>
+
     <section v-else-if="activeTab === 'parties'">
       <AdminPartiesPanel
         @error="(msg: string) => (actionError = msg)"
@@ -991,6 +1005,8 @@ const ALL_TABS = [
   { id: "packages", label: "Packages" },
   { id: "inbox", label: "Inbox" },
   { id: "audit", label: "Independent Audit" },
+  { id: "organizations", label: "Organizations" },
+  { id: "org-users", label: "Org Users" },
   { id: "parties", label: "Parties" },
   { id: "votes", label: "Vote results" },
   { id: "data", label: "Data plans" },
@@ -1413,6 +1429,8 @@ const pageTitle = computed(() => {
   if (activeTab.value === "sms-analytics") return "SMS Delivery & Response Analytics";
   if (activeTab.value === "disbursements") return "Fundraising & Donor Capital Command";
   if (activeTab.value === "chapters") return "Ogun Chapter Budget & Configuration";
+  if (activeTab.value === "organizations") return "Organizations (SaaS)";
+  if (activeTab.value === "org-users") return "Org Users & Roles";
   if (activeTab.value === "payment-gateways") return "Payment Gateway Configuration";
   if (activeTab.value === "packages") return "Package Distribution Command";
   if (activeTab.value === "parties") return "Party & Candidate Registry";
