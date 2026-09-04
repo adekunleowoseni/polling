@@ -1,28 +1,28 @@
 <template>
   <div>
-    <section class="relative overflow-hidden border-b border-ui-border/50">
-      <div class="absolute inset-0 bg-gradient-to-b from-red-100/50 via-ui-bg to-ui-bg dark:from-red-950/20 dark:via-ui-bg dark:to-ui-bg" />
-      <div class="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12">
+    <section class="relative overflow-hidden border-b border-outline-variant">
+      <div class="absolute inset-0 bg-gradient-to-b from-secondary-fixed via-background to-background dark:from-electric-pink/10 dark:via-deep-navy dark:to-deep-navy" />
+      <div class="relative mx-auto max-w-container-max px-margin-mobile py-10 lg:px-gutter sm:py-12">
         <div class="flex flex-wrap items-start justify-between gap-6">
           <div>
-            <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-700 dark:text-red-300">
+            <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-electric-pink/30 bg-secondary-fixed px-3 py-1 font-label-caps text-[11px] font-medium uppercase tracking-wider text-electric-pink">
               <span class="relative flex h-2 w-2">
-                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-                <span class="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-action-green opacity-75" />
+                <span class="relative inline-flex h-2 w-2 rounded-full bg-action-green" />
               </span>
               Real-time monitor · auto-refreshing
             </div>
-            <h1 class="text-3xl font-bold tracking-tight text-ui-text sm:text-4xl">
+            <h1 class="font-headline-lg text-3xl font-bold tracking-tight text-primary sm:text-4xl">
               Election Monitor
             </h1>
-            <p class="mt-3 max-w-2xl text-ui-muted">
-              Live polling unit feeds, ward activity, and people on site across Ogun State — updated every few seconds.
+            <p class="mt-3 max-w-2xl font-body-md text-on-surface-variant">
+              Live polling unit feeds, ward activity, and people on site — updated every few seconds.
             </p>
           </div>
-          <div class="flex flex-col items-end gap-2 text-right text-sm text-ui-muted">
+          <div class="flex flex-col items-end gap-2 text-right font-body-md text-sm text-on-surface-variant">
             <button
               type="button"
-              class="rounded-lg border border-ui-border/60 px-3 py-1.5 text-xs text-ui-text transition hover:bg-ui-muted/10"
+              class="rounded-full border border-outline-variant px-3 py-1.5 text-xs text-primary transition hover:bg-surface-container-low"
               :disabled="feedLoading"
               @click="refreshFeeds"
             >
@@ -65,7 +65,7 @@
         </div>
         <NuxtLink
           to="/feeds"
-          class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500"
+          class="rounded-full bg-electric-pink px-4 py-2 text-sm font-medium text-on-primary transition hover:bg-secondary"
         >
           Open live feeds
         </NuxtLink>
@@ -113,7 +113,7 @@
                         <p class="truncate text-xs text-ui-muted">{{ unit.code }}</p>
                         <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-ui-elevated">
                           <div
-                            class="h-full rounded-full bg-sky-500 transition-all duration-500"
+                            class="h-full rounded-full bg-electric-pink transition-all duration-500"
                             :style="{ width: `${peopleBarWidth(unit.people_count)}%` }"
                           />
                         </div>
@@ -123,12 +123,12 @@
                     <td class="px-5 py-3.5">
                       <NuxtLink
                         :to="{ path: '/feeds', query: { lga: unit.lga } }"
-                        class="text-sky-600 hover:underline dark:text-sky-400"
+                        class="text-electric-pink hover:underline"
                       >
                         {{ unit.lga }}
                       </NuxtLink>
                     </td>
-                    <td class="px-5 py-3.5 text-right font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    <td class="px-5 py-3.5 text-right font-semibold tabular-nums text-action-green">
                       {{ unit.people_count }}
                     </td>
                     <td class="px-5 py-3.5">
@@ -185,10 +185,10 @@
             v-for="lga in lgaSummaries"
             :key="lga.lga"
             :to="{ path: '/feeds', query: { lga: lga.lga } }"
-            class="rounded-full border border-ui-border/50 bg-ui-elevated/80 px-3 py-1 text-xs text-ui-muted transition hover:border-sky-500/40 hover:text-sky-600 dark:hover:text-sky-400"
+            class="rounded-full border border-outline-variant bg-surface-container-low px-3 py-1 text-xs text-on-surface-variant transition hover:border-electric-pink/40 hover:text-electric-pink"
           >
             {{ lga.lga }}
-            <span class="ml-1 font-semibold text-red-500">{{ lga.liveUnits }}</span>
+            <span class="ml-1 font-semibold text-electric-pink">{{ lga.liveUnits }}</span>
           </NuxtLink>
         </div>
       </section>
@@ -245,13 +245,13 @@ const monitorStats = computed(() => [
     label: "Live feeds",
     value: feedData.value?.live_feeds ?? 0,
     hint: "Streaming now",
-    accent: "text-red-600 dark:text-red-400",
+    accent: "text-electric-pink",
   },
   {
     label: "People on site",
     value: feedData.value?.total_people ?? 0,
     hint: "Across live feeds",
-    accent: "text-emerald-600 dark:text-emerald-400",
+    accent: "text-action-green",
   },
   {
     label: "Live LGAs",

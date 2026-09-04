@@ -1,20 +1,20 @@
 <template>
   <div class="mx-auto max-w-4xl space-y-8 p-6">
-    <section class="rounded-xl border border-white/10 bg-slate-900 p-6 shadow-xl">
-      <h1 class="text-2xl font-semibold text-white">Registration Scanner</h1>
-      <p class="mt-2 text-sm text-slate-400">
+    <section class="ui-card p-6">
+      <h1 class="text-2xl font-semibold text-ui-text">Registration Scanner</h1>
+      <p class="mt-2 text-sm text-ui-muted">
         Upload a paper registration form image. AI will extract fields and save them to MongoDB.
       </p>
 
       <div
-        class="mt-6 rounded-lg border-2 border-dashed border-slate-700 p-8 text-center"
+        class="mt-6 rounded-lg border-2 border-dashed border-outline-variant bg-surface-container-low p-8 text-center"
         @dragover.prevent
         @drop.prevent="onDrop"
       >
-        <p class="mb-3 text-sm text-slate-400">Drag and drop a form image, or choose a file.</p>
+        <p class="mb-3 text-sm text-ui-muted">Drag and drop a form image, or choose a file.</p>
         <input
           ref="fileInput"
-          class="mx-auto block text-sm text-slate-300"
+          class="mx-auto block text-sm text-on-surface"
           type="file"
           accept="image/png,image/jpeg,application/pdf"
           @change="onSelectFile"
@@ -31,27 +31,27 @@
         </button>
       </div>
 
-      <p v-if="errorMsg" class="mt-3 text-sm text-red-400">{{ errorMsg }}</p>
+      <p v-if="errorMsg" class="mt-3 text-sm text-red-500 dark:text-red-400">{{ errorMsg }}</p>
     </section>
 
-    <section v-if="result" class="rounded-xl border border-white/10 bg-slate-900 p-6 shadow-xl">
-      <h2 class="text-lg font-semibold text-white">Extracted Registration</h2>
+    <section v-if="result" class="ui-card p-6">
+      <h2 class="text-lg font-semibold text-ui-text">Extracted Registration</h2>
       <dl class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div><dt class="text-xs text-slate-500">Name</dt><dd class="text-slate-200">{{ result.name || "-" }}</dd></div>
-        <div><dt class="text-xs text-slate-500">Phone</dt><dd class="text-slate-200">{{ result.phone || "-" }}</dd></div>
-        <div><dt class="text-xs text-slate-500">Email</dt><dd class="text-slate-200">{{ result.email || "-" }}</dd></div>
-        <div><dt class="text-xs text-slate-500">LGA</dt><dd class="text-slate-200">{{ result.lga || "-" }}</dd></div>
-        <div><dt class="text-xs text-slate-500">Ward</dt><dd class="text-slate-200">{{ result.ward || "-" }}</dd></div>
-        <div><dt class="text-xs text-slate-500">Polling Unit</dt><dd class="text-slate-200">{{ result.polling_unit || "-" }}</dd></div>
-        <div><dt class="text-xs text-slate-500">Address</dt><dd class="text-slate-200">{{ result.address || "-" }}</dd></div>
-        <div><dt class="text-xs text-slate-500">Date</dt><dd class="text-slate-200">{{ result.form_date || "-" }}</dd></div>
+        <div><dt class="text-xs text-ui-muted">Name</dt><dd class="text-ui-text">{{ result.name || "-" }}</dd></div>
+        <div><dt class="text-xs text-ui-muted">Phone</dt><dd class="text-ui-text">{{ result.phone || "-" }}</dd></div>
+        <div><dt class="text-xs text-ui-muted">Email</dt><dd class="text-ui-text">{{ result.email || "-" }}</dd></div>
+        <div><dt class="text-xs text-ui-muted">LGA</dt><dd class="text-ui-text">{{ result.lga || "-" }}</dd></div>
+        <div><dt class="text-xs text-ui-muted">Ward</dt><dd class="text-ui-text">{{ result.ward || "-" }}</dd></div>
+        <div><dt class="text-xs text-ui-muted">Polling Unit</dt><dd class="text-ui-text">{{ result.polling_unit || "-" }}</dd></div>
+        <div><dt class="text-xs text-ui-muted">Address</dt><dd class="text-ui-text">{{ result.address || "-" }}</dd></div>
+        <div><dt class="text-xs text-ui-muted">Date</dt><dd class="text-ui-text">{{ result.form_date || "-" }}</dd></div>
       </dl>
     </section>
 
-    <section class="rounded-xl border border-white/10 bg-slate-900 p-6 shadow-xl">
-      <h2 class="mb-3 text-lg font-semibold text-white">Registration Trends</h2>
+    <section class="ui-card p-6">
+      <h2 class="mb-3 text-lg font-semibold text-ui-text">Registration Trends</h2>
       <Line v-if="chartData.labels.length" :data="chartData" :options="chartOptions" />
-      <p v-else class="text-sm text-slate-500">No analytics data yet.</p>
+      <p v-else class="text-sm text-ui-muted">No analytics data yet.</p>
     </section>
   </div>
 </template>
@@ -63,6 +63,8 @@ import { Line } from "vue-chartjs";
 definePageMeta({ layout: "default" });
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Tooltip, Legend);
+
+const { isDark } = useTheme();
 
 type Registration = {
   id: string;
@@ -89,14 +91,18 @@ const errorMsg = ref("");
 const result = ref<Registration | null>(null);
 const trends = ref<Trend[]>([]);
 
-const chartOptions = {
-  responsive: true,
-  plugins: { legend: { labels: { color: "#94a3b8" } } },
-  scales: {
-    x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.1)" } },
-    y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.1)" } },
-  },
-};
+const chartOptions = computed(() => {
+  const tick = isDark.value ? "#c7c4d7" : "#47464c";
+  const grid = isDark.value ? "rgba(199,196,215,0.12)" : "rgba(120,118,124,0.16)";
+  return {
+    responsive: true,
+    plugins: { legend: { labels: { color: tick } } },
+    scales: {
+      x: { ticks: { color: tick }, grid: { color: grid } },
+      y: { ticks: { color: tick }, grid: { color: grid } },
+    },
+  };
+});
 
 const chartData = computed(() => ({
   labels: trends.value.map((x) => x.date),

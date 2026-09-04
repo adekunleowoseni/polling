@@ -29,6 +29,24 @@ export type PackageDistributionCreate = {
   auto_count?: boolean;
 };
 
+export type PackageKit = {
+  id: string;
+  title: string;
+  detail: string;
+  form_title: string;
+  stock_label: string;
+  default_audience: string;
+  created_at: string;
+};
+
+export type PackageKitCreate = {
+  title: string;
+  detail?: string;
+  form_title?: string;
+  stock_label?: string;
+  default_audience?: "voter" | "member" | "both";
+};
+
 export function usePackages() {
   const config = useRuntimeConfig();
   const { authHeaders } = useAdminAuth();
@@ -47,5 +65,26 @@ export function usePackages() {
     });
   }
 
-  return { loadDistributions, createDistribution };
+  async function loadKits(): Promise<PackageKit[]> {
+    return await $fetch<PackageKit[]>(`${config.public.apiBase}/admin/packages/kits`, {
+      headers: authHeaders(),
+    });
+  }
+
+  async function createKit(body: PackageKitCreate): Promise<PackageKit> {
+    return await $fetch<PackageKit>(`${config.public.apiBase}/admin/packages/kits`, {
+      method: "POST",
+      headers: authHeaders(),
+      body,
+    });
+  }
+
+  async function deleteKit(kitId: string): Promise<void> {
+    await $fetch(`${config.public.apiBase}/admin/packages/kits/${kitId}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+  }
+
+  return { loadDistributions, createDistribution, loadKits, createKit, deleteKit };
 }

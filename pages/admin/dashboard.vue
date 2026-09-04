@@ -1,358 +1,495 @@
 <template>
-  <div class="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-    <header class="flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-semibold text-ui-text">Admin control panel</h1>
-        <p v-if="admin" class="mt-1 text-sm text-ui-muted">
-          {{ admin.name }} · {{ admin.role === "state_admin" ? "State admin" : "Super admin" }}
-          <span v-if="admin.state"> · {{ admin.state }}</span>
-        </p>
+  <div class="flex w-full flex-col">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6 md:p-8">
+    <header
+      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'chapters' && activeTab !== 'payment-gateways' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds'"
+      class="flex flex-col gap-4 pb-2 lg:flex-row lg:items-center lg:justify-between"
+    >
+      <div class="min-w-0 flex-1 flex flex-col gap-1.5">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-label-caps text-label-caps uppercase tracking-wider text-outline">HQ Central Command</span>
+          <span class="text-xs text-outline">/</span>
+          <span class="font-label-caps text-label-caps font-bold uppercase tracking-wider text-secondary">{{ currentNavLabel }}</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <h1 class="font-headline-md text-2xl font-bold tracking-tight text-primary sm:text-headline-md">{{ pageTitle }}</h1>
+          <div
+            v-if="activeTab === 'overview'"
+            class="inline-flex items-center gap-2 rounded-full bg-surface-container-low px-3 py-1 shadow-sm"
+          >
+            <span class="h-2 w-2 animate-ping rounded-full bg-action-green" />
+            <span class="font-label-caps text-[11px] font-semibold text-on-surface">
+              Live sync: {{ commandLive }} feeds · {{ Number(commandPeople || 0).toLocaleString() }} people
+            </span>
+          </div>
+        </div>
       </div>
-      <AdminProfileMenu :admin="admin" @logout="logout" />
+      <div
+        v-if="activeTab === 'overview'"
+        class="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 lg:w-auto lg:max-w-none lg:shrink-0"
+      >
+        <button
+          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
+          type="button"
+          @click="exportAuditCsv"
+        >
+          <span class="material-symbols-outlined shrink-0 text-[18px] text-outline">file_download</span>
+          <span class="truncate">Export audit</span>
+        </button>
+        <button
+          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
+          type="button"
+          @click="setTab('inbox')"
+        >
+          <span class="material-symbols-outlined shrink-0 text-[18px] text-electric-pink">campaign</span>
+          <span class="truncate">Quick alert</span>
+        </button>
+        <button
+          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-electric-pink px-4 font-button-text text-sm font-semibold text-pure-white shadow-sm shadow-electric-pink/25 transition hover:opacity-95"
+          type="button"
+          @click="setTab('feeds')"
+        >
+          <span class="material-symbols-outlined shrink-0 text-[18px]">videocam</span>
+          <span class="truncate">Live operations</span>
+        </button>
+      </div>
     </header>
 
-    <nav class="flex flex-wrap gap-2 border-b border-ui-border/40 pb-3">
-      <button
-        v-for="tab in visibleTabs"
-        :key="tab.id"
-        type="button"
-        class="rounded-lg px-3 py-1.5 text-sm transition"
-        :class="activeTab === tab.id ? 'bg-violet-600 text-white' : 'text-ui-muted hover:bg-ui-muted/10 hover:text-ui-text'"
-        @click="activeTab = tab.id"
-      >
-        {{ tab.label }}
-      </button>
-    </nav>
+    <p v-if="message" class="sr-only">{{ message }}</p>
+    <p v-if="actionError" class="sr-only">{{ actionError }}</p>
 
-    <div
-      v-if="showStateScopeFilter"
-      class="flex flex-wrap items-center gap-2 rounded-lg border border-ui-border/40 bg-ui-elevated/30 px-3 py-2"
-    >
-      <p class="text-xs font-medium uppercase tracking-wider text-ui-muted">State scope</p>
-      <button
-        v-for="opt in stateScopeFilters"
-        :key="opt.id"
-        type="button"
-        class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
-        :class="stateScopeFilter === opt.id ? 'bg-violet-600 text-white' : 'border border-ui-border/50 text-ui-muted hover:bg-ui-muted/10'"
-        @click="stateScopeFilter = opt.id"
-      >
-        {{ opt.label }}
-      </button>
-      <p class="text-xs text-ui-muted">
-        Filters overview, feeds, pictures, recordings, agents, and vote results.
-      </p>
-    </div>
-
-    <p v-if="message" class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-      {{ message }}
-    </p>
-    <p v-if="actionError" class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-500 dark:text-red-300">
-      {{ actionError }}
-    </p>
-
-    <section v-if="activeTab === 'overview'" class="space-y-4">
-      <div
-        v-if="showStateScopeFilter && stateScopeFilter === 'all' && overviewByState.length"
-        class="grid gap-3 sm:grid-cols-2"
-      >
-        <div
-          v-for="row in overviewByState"
-          :key="row.state"
-          class="ui-card p-5"
-        >
-          <p class="text-xs font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">{{ row.state }}</p>
-          <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
+    <section v-if="activeTab === 'overview'" class="flex flex-col gap-6">
+      <section aria-label="Operational Indicators" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-5 shadow-sm">
+          <div class="flex items-start justify-between">
             <div>
-              <dt class="text-xs text-ui-muted">Live feeds</dt>
-              <dd class="font-semibold text-ui-text">{{ row.live }}</dd>
+              <p class="font-label-caps text-label-caps font-semibold uppercase tracking-wider text-outline">Live feeds</p>
+              <h2 class="mt-1 font-headline-md text-3xl font-extrabold tracking-tight text-primary">{{ formatStat(commandLive) }}</h2>
             </div>
-            <div>
-              <dt class="text-xs text-ui-muted">Units</dt>
-              <dd class="font-semibold text-ui-text">{{ row.units }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs text-ui-muted">Agents</dt>
-              <dd class="font-semibold text-ui-text">{{ row.agents }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs text-ui-muted">Pictures</dt>
-              <dd class="font-semibold text-ui-text">{{ row.snaps }}</dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-      <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <div
-          v-for="stat in overviewStats"
-          :key="stat.label"
-          class="ui-card p-5"
-          :class="stat.clickable ? 'cursor-pointer transition hover:border-violet-400/60 hover:bg-violet-500/5' : ''"
-          @click="stat.clickable ? openVoteResults() : undefined"
-        >
-          <p class="text-xs uppercase tracking-wider text-ui-muted">{{ stat.label }}</p>
-          <p class="mt-2 text-2xl font-bold text-ui-text">{{ stat.value }}</p>
-          <p v-if="stat.hint" class="mt-1 text-xs text-ui-muted">{{ stat.hint }}</p>
-        </div>
-      </div>
-      <p class="text-xs text-ui-muted">
-        Tip: click the <span class="font-medium text-ui-text">Total votes</span> card to open the full vote breakdown.
-      </p>
-    </section>
-
-    <section v-else-if="activeTab === 'feeds'" class="ui-card overflow-hidden">
-      <div class="border-b border-ui-border/40 px-5 py-4">
-        <h2 class="font-semibold text-ui-text">Polling units & live feeds</h2>
-        <p class="text-xs text-ui-muted">
-          {{ scopedUnits.length }} unit(s)
-          <span v-if="stateScopeFilter !== 'all'"> · {{ stateScopeFilter }}</span>
-          · Force offline, correct counts, or remove units.
-        </p>
-      </div>
-
-      <div v-if="loadingUnits" class="p-8 text-center text-sm text-ui-muted">Loading…</div>
-      <div v-else-if="!scopedUnits.length" class="p-8 text-center text-sm text-ui-muted">No polling units in this scope.</div>
-
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
-          <thead>
-            <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
-              <th class="px-4 py-3">Unit</th>
-              <th class="px-4 py-3">State</th>
-              <th class="px-4 py-3">Ward</th>
-              <th class="px-4 py-3">LGA</th>
-              <th class="px-4 py-3">Status</th>
-              <th class="px-4 py-3 text-right">People</th>
-              <th class="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-ui-border/30">
-            <tr v-for="unit in scopedUnits" :key="unit.id">
-              <td class="px-4 py-3">
-                <p class="font-medium text-ui-text">{{ unit.name }}</p>
-                <p class="text-xs text-ui-muted">{{ unit.code }}</p>
-              </td>
-              <td class="px-4 py-3 font-medium text-ui-text">{{ unit.state || "—" }}</td>
-              <td class="px-4 py-3 text-ui-muted">{{ unit.ward }}</td>
-              <td class="px-4 py-3 text-ui-muted">{{ unit.lga }}</td>
-              <td class="px-4 py-3">
-                <span
-                  class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                  :class="unit.stream_status === 'live' ? 'bg-red-500/15 text-red-600 dark:text-red-400' : 'bg-ui-elevated text-ui-muted'"
-                >
-                  {{ unit.stream_status }}
-                </span>
-              </td>
-              <td class="px-4 py-3 text-right">
-                <input v-model.number="countEdits[unit.code]" type="number" min="0" class="ui-input w-20 text-right" />
-              </td>
-              <td class="px-4 py-3">
-                <div class="flex flex-wrap gap-2">
-                  <button type="button" class="rounded border border-ui-border/50 px-2 py-1 text-xs hover:bg-ui-muted/10" @click="saveCount(unit.code)">
-                    Save count
-                  </button>
-                  <button
-                    v-if="unit.stream_status === 'live'"
-                    type="button"
-                    class="rounded border border-amber-500/40 px-2 py-1 text-xs text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
-                    @click="forceOffline(unit.code)"
-                  >
-                    Force offline
-                  </button>
-                  <button type="button" class="rounded border border-red-500/40 px-2 py-1 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400" @click="deleteUnit(unit.code)">
-                    Delete
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section v-else-if="activeTab === 'snaps'" class="ui-card overflow-hidden">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
-        <div>
-          <h2 class="font-semibold text-ui-text">Saved feed pictures</h2>
-          <p class="text-xs text-ui-muted">
-            {{ scopedSnaps.length }} image(s)
-            <span v-if="stateScopeFilter !== 'all'"> · {{ stateScopeFilter }}</span>
-            · grouped by state, LGA and ward
-          </p>
-        </div>
-        <button type="button" class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10" @click="loadSnaps">
-          Refresh
-        </button>
-      </div>
-
-      <div v-if="loadingSnaps" class="p-8 text-center text-sm text-ui-muted">Loading…</div>
-      <div v-else-if="!scopedSnaps.length" class="p-8 text-center text-sm text-ui-muted">No saved pictures in this scope.</div>
-
-      <div v-else class="space-y-8 p-5">
-        <section v-for="lgaGroup in snapsByLga" :key="`${lgaGroup.state}-${lgaGroup.lga}`">
-          <h3 class="text-sm font-semibold text-ui-text">{{ lgaGroup.label }}</h3>
-          <div v-for="wardGroup in lgaGroup.wards" :key="`${lgaGroup.state}-${lgaGroup.lga}-${wardGroup.ward}`" class="mt-4">
-            <p class="mb-2 text-xs font-medium uppercase tracking-wider text-ui-muted">
-              {{ wardGroup.ward }} · {{ wardGroup.snaps.length }} picture(s)
-            </p>
-            <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <article
-                v-for="snap in wardGroup.snaps"
-                :key="snap.id"
-                class="group overflow-hidden rounded-lg border border-ui-border/40 bg-ui-elevated/50"
-              >
-                <img
-                  :src="feedSnapImageUrl(apiBase, snap.id)"
-                  :alt="snap.polling_unit_name"
-                  :title="`${snap.polling_unit_name} · ${snap.state}`"
-                  class="aspect-video w-full object-cover"
-                />
-                <div class="px-2 py-1 text-[10px] text-ui-muted">
-                  <p class="truncate font-medium text-ui-text">{{ snap.polling_unit_name }}</p>
-                  <p class="truncate">{{ snap.state }} · {{ snap.ward }} · {{ snap.lga }}</p>
-                </div>
-                <button
-                  type="button"
-                  class="w-full py-1 text-[10px] text-red-600 opacity-0 transition group-hover:opacity-100 hover:bg-red-500/10 dark:text-red-400"
-                  @click="deleteSnap(snap.id)"
-                >
-                  Delete
-                </button>
-              </article>
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/5 text-primary">
+              <span class="material-symbols-outlined text-[20px]">videocam</span>
             </div>
           </div>
-        </section>
-      </div>
-    </section>
-
-    <section v-else-if="activeTab === 'recordings'" class="ui-card overflow-hidden">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
-        <div>
-          <h2 class="font-semibold text-ui-text">Saved feed recordings</h2>
-          <p class="text-xs text-ui-muted">
-            {{ scopedRecordings.length }} recording(s)
-            <span v-if="stateScopeFilter !== 'all'"> · {{ stateScopeFilter }}</span>
-            · assembled from live relay frames
-          </p>
+          <div class="mt-4 flex items-center justify-between">
+            <div class="flex items-center gap-1.5 rounded-full bg-tertiary-fixed/40 px-2 py-0.5">
+              <span class="material-symbols-outlined text-[16px] text-action-green">trending_up</span>
+              <span class="font-label-caps text-label-caps font-bold text-on-tertiary-fixed">{{ liveShareLabel }}</span>
+            </div>
+            <div class="h-6 w-24">
+              <svg class="h-full w-full fill-none stroke-action-green stroke-2" viewBox="0 0 100 24">
+                <path d="M0,20 Q20,15 35,17 T65,8 T100,3" vector-effect="non-scaling-stroke" />
+              </svg>
+            </div>
+          </div>
         </div>
-        <button type="button" class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10" @click="loadRecordings">
-          Refresh
-        </button>
-      </div>
 
-      <div v-if="loadingRecordings" class="p-8 text-center text-sm text-ui-muted">Loading…</div>
-      <div v-else-if="!scopedRecordings.length" class="p-8 text-center text-sm text-ui-muted">
-        No recordings in this scope yet.
-      </div>
+        <div class="flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-5 shadow-sm">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="font-label-caps text-label-caps font-semibold uppercase tracking-wider text-outline">Field agents deployed</p>
+              <h2 class="mt-1 font-headline-md text-3xl font-extrabold tracking-tight text-primary">{{ formatStat(commandAgents) }}</h2>
+            </div>
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/5 text-primary">
+              <span class="material-symbols-outlined text-[20px]">groups</span>
+            </div>
+          </div>
+          <div class="mt-4 flex items-center justify-between">
+            <span class="font-label-caps text-label-caps text-on-surface-variant">{{ commandUnits }} registered units</span>
+            <div class="flex items-center gap-1.5 rounded-full bg-action-green/20 px-2 py-0.5">
+              <span class="h-1.5 w-1.5 rounded-full bg-action-green" />
+              <span class="font-label-caps text-label-caps font-bold text-primary">{{ liveShareLabel }} live</span>
+            </div>
+          </div>
+        </div>
 
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
-          <thead>
-            <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
-              <th class="px-4 py-3">Polling unit</th>
-              <th class="px-4 py-3">State</th>
-              <th class="px-4 py-3">Ward</th>
-              <th class="px-4 py-3">LGA</th>
-              <th class="px-4 py-3">Started</th>
-              <th class="px-4 py-3 text-right">Length</th>
-              <th class="px-4 py-3 text-right">Size</th>
-              <th class="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-ui-border/30">
-            <tr v-for="rec in scopedRecordings" :key="rec.id">
-              <td class="px-4 py-3">
-                <p class="font-medium text-ui-text">{{ rec.polling_unit_name || rec.code }}</p>
-                <p class="text-xs text-ui-muted">{{ rec.code }}</p>
-              </td>
-              <td class="px-4 py-3 font-medium text-ui-text">{{ rec.state || "—" }}</td>
-              <td class="px-4 py-3 text-ui-muted">{{ rec.ward || "—" }}</td>
-              <td class="px-4 py-3 text-ui-muted">{{ rec.lga || "—" }}</td>
-              <td class="px-4 py-3 text-ui-muted">
-                {{ formatWhen(rec.started_at) }}
-                <span
-                  v-if="rec.status === 'recording'"
-                  class="ml-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400"
-                >
-                  recording…
+        <div class="flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-5 shadow-sm">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="font-label-caps text-label-caps font-semibold uppercase tracking-wider text-outline">People on site</p>
+              <h2 class="mt-1 font-headline-md text-3xl font-extrabold tracking-tight text-primary">{{ formatStat(commandPeople) }}</h2>
+            </div>
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/5 text-primary">
+              <span class="material-symbols-outlined text-[20px]">pin_drop</span>
+            </div>
+          </div>
+          <div class="mt-4 flex flex-col gap-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-label-caps text-label-caps text-outline">Across live polling units</span>
+              <span class="font-label-caps text-label-caps font-bold text-electric-pink">{{ commandLive }} streams</span>
+            </div>
+            <div class="h-1.5 w-full overflow-hidden rounded-full bg-surface-container-high">
+              <div class="h-full rounded-full bg-action-green" :style="{ width: `${liveSharePct}%` }" />
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-5 shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-label-caps text-label-caps font-semibold uppercase tracking-wider text-outline">Votes captured</p>
+              <h2 class="mt-1 font-headline-md text-3xl font-extrabold tracking-tight text-primary">{{ formatStat(commandVotes) }}</h2>
+            </div>
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/5 text-primary">
+              <span class="material-symbols-outlined text-[20px]">how_to_vote</span>
+            </div>
+          </div>
+          <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span class="font-label-caps text-label-caps text-on-surface-variant">
+              {{ commandUnitsReported }} unit(s) reported
+            </span>
+            <button
+              type="button"
+              class="inline-flex h-9 w-full shrink-0 items-center justify-center gap-1.5 rounded-lg bg-deep-navy px-3 font-button-text text-xs font-semibold text-pure-white transition hover:bg-primary sm:w-auto"
+              @click="openVoteResults"
+            >
+              <span>Open breakdown</span>
+              <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div class="flex flex-col gap-6 lg:col-span-8">
+          <div class="flex flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
+            <div class="flex flex-col items-start justify-between gap-3 bg-surface-container-lowest p-5 sm:flex-row sm:items-center">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="h-2.5 w-2.5 rounded-full bg-action-green" />
+                  <h3 class="font-button-text text-sm font-bold text-primary">Field turf & live deployment</h3>
+                </div>
+                <p class="mt-0.5 font-body-md text-xs text-outline">Polling units grouped by local government · live streams in view</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="rounded-lg bg-surface-container-low px-2.5 py-1 font-label-caps text-label-caps font-bold text-primary">
+                  Coverage: {{ liveSharePct }}%
                 </span>
-              </td>
-              <td class="px-4 py-3 text-right text-ui-muted">{{ formatDuration(rec.duration_seconds) }}</td>
-              <td class="px-4 py-3 text-right text-ui-muted">{{ formatBytes(rec.file_size) }}</td>
-              <td class="px-4 py-3">
-                <div class="flex flex-wrap gap-2">
+                <button
+                  class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-deep-navy px-3 font-button-text text-xs font-semibold text-pure-white transition hover:bg-primary"
+                  type="button"
+                  @click="setTab('feeds')"
+                >
+                  <span class="material-symbols-outlined text-[14px]">map</span>
+                  <span>Open feeds</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="relative h-80 w-full overflow-hidden bg-deep-navy">
+              <GoogleMapPanel
+                class="absolute inset-0"
+                :center="overviewMapCenter"
+                :zoom="10"
+                :markers="overviewMapMarkers"
+                :loading="overviewMapLoading"
+              />
+              <div class="pointer-events-none absolute left-4 top-4 z-10 flex flex-col gap-1 rounded-xl bg-deep-navy/90 px-3 py-2 text-pure-white shadow-lg backdrop-blur-md">
+                <span class="font-label-caps text-label-caps text-action-green">Active clusters</span>
+                <span class="text-sm font-bold">{{ topCluster?.lga || overviewMapData?.lga || "Ogun State" }}</span>
+                <span class="text-xs text-on-navy">
+                  <template v-if="overviewMapData">
+                    {{ overviewMapData.live_count }} live · {{ overviewMapData.registered_count }} registered ·
+                    {{ overviewMapData.total }} units
+                  </template>
+                  <template v-else-if="topCluster">
+                    {{ topCluster.live }} live · {{ topCluster.people.toLocaleString() }} people
+                  </template>
+                  <template v-else>Waiting for field streams</template>
+                </span>
+              </div>
+              <div class="pointer-events-none absolute bottom-4 left-4 right-4 z-10 flex flex-col gap-3 rounded-xl bg-deep-navy/85 p-3 text-pure-white backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 font-label-caps text-xs">
+                  <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-action-green" /> Live</span>
+                  <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-electric-pink" /> Registered</span>
+                  <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-outline" /> Catalog</span>
+                </div>
+                <div class="pointer-events-auto flex shrink-0 items-center gap-2">
                   <button
+                    class="inline-flex h-8 items-center justify-center rounded-lg bg-pure-white/15 px-3 font-button-text text-xs font-semibold text-pure-white transition hover:bg-pure-white/25"
                     type="button"
-                    class="rounded border border-ui-border/50 px-2 py-1 text-xs hover:bg-ui-muted/10 disabled:opacity-50"
-                    :disabled="rec.status === 'recording' || busyRecording === rec.id"
-                    @click="playRecording(rec)"
+                    @click="refreshOverviewMap({ reloadUnits: true })"
                   >
-                    {{ busyRecording === rec.id ? "Loading…" : "Play" }}
+                    Refresh
                   </button>
                   <button
+                    class="inline-flex h-8 items-center justify-center rounded-lg bg-electric-pink px-3 font-button-text text-xs font-semibold text-pure-white transition hover:opacity-95"
                     type="button"
-                    class="rounded border border-ui-border/50 px-2 py-1 text-xs hover:bg-ui-muted/10 disabled:opacity-50"
-                    :disabled="rec.status === 'recording' || busyRecording === rec.id"
-                    @click="downloadRecording(rec)"
+                    @click="setTab('feeds')"
                   >
-                    Download
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded border border-red-500/40 px-2 py-1 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
-                    @click="deleteRecording(rec.id)"
-                  >
-                    Delete
+                    Expand
                   </button>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 bg-surface-container-lowest p-4 sm:grid-cols-3">
+              <div v-for="row in topLgas.slice(0, 3)" :key="row.lga" class="rounded-xl bg-surface-container-low p-3">
+                <p class="font-label-caps text-label-caps font-semibold text-outline">{{ row.lga }}</p>
+                <div class="mt-1 flex items-baseline justify-between">
+                  <span class="font-button-text text-sm font-bold text-primary">{{ row.live }} / {{ row.units }}</span>
+                  <span class="font-label-caps text-label-caps font-bold" :class="row.pct >= 50 ? 'text-action-green' : 'text-secondary'">{{ row.pct }}%</span>
+                </div>
+              </div>
+              <div v-if="!topLgas.length" class="rounded-xl bg-surface-container-low p-3 text-xs text-on-surface-variant">
+                No polling units in this scope yet.
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-4 rounded-xl bg-surface-container-lowest p-5 shadow-sm">
+            <div class="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
+              <div>
+                <h3 class="font-button-text text-sm font-bold text-primary">Live throughput by local government</h3>
+                <p class="font-body-md text-xs text-outline">People counted on live streams vs registered units</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="flex items-center gap-1.5 font-label-caps text-label-caps text-primary">
+                  <span class="h-2.5 w-2.5 rounded-full bg-deep-navy" /> Units
+                </span>
+                <span class="flex items-center gap-1.5 font-label-caps text-label-caps text-electric-pink">
+                  <span class="h-2.5 w-2.5 rounded-full bg-electric-pink" /> Live
+                </span>
+              </div>
+            </div>
+            <div class="flex h-44 w-full items-end gap-2 pt-6">
+              <div
+                v-for="bar in velocityBars"
+                :key="bar.lga"
+                class="flex h-full flex-1 flex-col items-center justify-end gap-1.5"
+              >
+                <div
+                  class="w-full rounded-t-md transition-all hover:opacity-90"
+                  :class="bar.live ? 'bg-electric-pink' : 'bg-deep-navy'"
+                  :style="{ height: `${bar.height}%` }"
+                />
+                <span class="max-w-full truncate font-label-caps text-[10px] text-outline">{{ bar.short }}</span>
+              </div>
+              <p v-if="!velocityBars.length" class="w-full self-center text-center text-xs text-on-surface-variant">No LGA activity yet.</p>
+            </div>
+            <div class="flex items-center justify-between border-t border-surface-container-low pt-3 text-xs">
+              <span class="font-body-md font-medium text-on-surface-variant">{{ commandPeople.toLocaleString() }} people counted across live units</span>
+              <span class="flex items-center gap-1 font-label-caps text-label-caps font-bold text-action-green">
+                <span class="material-symbols-outlined text-[14px]">bolt</span> Real-time pipeline
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-6 lg:col-span-4">
+          <div class="flex flex-col gap-4 rounded-xl bg-surface-container-lowest p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="h-2 w-2 animate-pulse rounded-full bg-electric-pink" />
+                <h3 class="font-button-text text-sm font-bold text-primary">Critical action triggers</h3>
+              </div>
+              <span class="rounded-full bg-secondary-fixed px-2 py-0.5 font-label-caps text-label-caps font-bold text-secondary">{{ criticalAlerts.length }} open</span>
+            </div>
+            <div class="flex flex-col gap-3">
+              <div
+                v-for="alert in criticalAlerts"
+                :key="alert.id"
+                class="flex flex-col gap-2 rounded-xl bg-surface-container-low p-3.5 transition-colors hover:bg-surface-container"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="font-label-caps text-[11px] font-bold uppercase tracking-wider" :class="alert.tone">{{ alert.title }}</span>
+                  <span class="font-label-caps text-[10px] text-outline">{{ alert.meta }}</span>
+                </div>
+                <p class="font-body-md text-xs leading-snug text-on-surface">{{ alert.body }}</p>
+                <div v-if="alert.action" class="mt-1 flex gap-2">
+                  <button
+                    class="rounded-lg bg-deep-navy px-3 py-1 text-xs font-button-text text-pure-white transition-colors hover:bg-primary"
+                    type="button"
+                    @click="alert.action()"
+                  >
+                    {{ alert.actionLabel }}
+                  </button>
+                </div>
+              </div>
+              <p v-if="!criticalAlerts.length" class="rounded-xl bg-surface-container-low p-3.5 text-xs text-on-surface-variant">
+                No pending accreditations or flagged units in this scope.
+              </p>
+            </div>
+          </div>
+
+          <div class="relative flex flex-col gap-4 overflow-hidden rounded-xl bg-deep-navy p-5 text-pure-white shadow-sm">
+            <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-electric-pink/15 blur-2xl" />
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[20px] text-action-green">smart_toy</span>
+                <h3 class="font-button-text text-sm font-bold text-pure-white">e-mobilize copilot</h3>
+              </div>
+              <span class="font-label-caps text-label-caps uppercase tracking-widest text-action-green">Live</span>
+            </div>
+            <div class="flex flex-col gap-2 rounded-xl bg-surface-container-lowest/5 p-3.5 backdrop-blur-sm">
+              <p class="font-body-md text-xs leading-relaxed text-on-navy">{{ copilotInsight }}</p>
+              <div class="flex items-center justify-between pt-2">
+                <button
+                  class="rounded-lg bg-action-green px-3 py-1.5 text-xs font-bold font-button-text text-on-tertiary-fixed transition-colors hover:bg-tertiary-fixed"
+                  type="button"
+                  @click="setTab('feeds')"
+                >
+                  Review live units
+                </button>
+                <span class="font-label-caps text-[10px] text-on-primary-container">From live telemetry</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-3 rounded-xl bg-surface-container-lowest p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+              <h3 class="font-button-text text-sm font-bold text-primary">Security & compliance</h3>
+              <span class="material-symbols-outlined text-[20px] text-action-green">verified</span>
+            </div>
+            <div class="flex flex-col gap-2 text-xs">
+              <div class="flex items-center justify-between border-b border-surface-container-low py-1.5">
+                <span class="font-body-md text-on-surface-variant">SOC 2 Type II validation</span>
+                <span class="font-label-caps text-label-caps font-bold text-action-green">Passed</span>
+              </div>
+              <div class="flex items-center justify-between border-b border-surface-container-low py-1.5">
+                <span class="font-body-md text-on-surface-variant">Flagged polling units</span>
+                <span class="font-label-caps text-label-caps font-bold text-primary">{{ flaggedUnits.length }}</span>
+              </div>
+              <div class="flex items-center justify-between border-b border-surface-container-low py-1.5">
+                <span class="font-body-md text-on-surface-variant">Result sheets on file</span>
+                <span class="font-label-caps text-label-caps font-bold text-action-green">{{ resultSheets.length }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3 py-1.5">
+                <span class="font-body-md text-on-surface-variant">Independent audit</span>
+                <button
+                  class="inline-flex h-8 items-center justify-center rounded-lg bg-surface-container px-3 font-button-text text-xs font-semibold text-primary transition hover:bg-surface-container-high"
+                  type="button"
+                  @click="setTab('audit')"
+                >
+                  Open panel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div v-if="playingRecordingUrl" class="border-t border-ui-border/40 p-5">
-        <div class="mb-2 flex items-center justify-between">
-          <p class="text-sm font-medium text-ui-text">{{ playingRecordingTitle }}</p>
-          <button type="button" class="text-xs text-ui-muted hover:text-ui-text" @click="closePlayer">Close</button>
+      <section class="flex flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
+        <div class="flex flex-col items-start justify-between gap-3 bg-surface-container-lowest p-5 sm:flex-row sm:items-center">
+          <div>
+            <h3 class="font-headline-md text-xl font-bold tracking-tight text-primary">Active polling unit dispatches</h3>
+            <p class="font-body-md text-xs text-outline">Live status of registered units, people on site, and stream state</p>
+          </div>
+          <button
+            class="inline-flex h-9 items-center justify-center rounded-lg bg-deep-navy px-3.5 font-button-text text-xs font-semibold text-pure-white transition hover:bg-primary"
+            type="button"
+            @click="setTab('feeds')"
+          >
+            View all units
+          </button>
         </div>
-        <video :src="playingRecordingUrl" controls autoplay class="w-full rounded-lg bg-black" />
-        <p class="mt-2 text-xs text-ui-muted">
-          If the video does not play inline, use Download — the file plays in any desktop player (e.g. VLC).
-        </p>
-      </div>
+        <div class="w-full overflow-x-auto">
+          <table class="w-full border-collapse text-left text-xs">
+            <thead>
+              <tr class="bg-surface-container-low font-label-caps text-[11px] uppercase tracking-wider text-outline">
+                <th class="px-4 py-3 font-semibold">Code</th>
+                <th class="px-4 py-3 font-semibold">Polling unit</th>
+                <th class="px-4 py-3 font-semibold">LGA / Ward</th>
+                <th class="px-4 py-3 font-semibold">People</th>
+                <th class="px-4 py-3 font-semibold">Status</th>
+                <th class="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-surface-container-low font-body-md text-on-surface">
+              <tr v-for="unit in dispatchRows" :key="unit.id" class="transition-colors hover:bg-off-white/60">
+                <td class="px-4 py-3.5 font-label-caps font-medium text-outline">{{ unit.code }}</td>
+                <td class="px-4 py-3.5 font-button-text font-bold text-primary">{{ unit.name }}</td>
+                <td class="px-4 py-3.5">{{ unit.lga }} · {{ unit.ward }}</td>
+                <td class="px-4 py-3.5 font-label-caps font-semibold">{{ unit.people_count }}</td>
+                <td class="px-4 py-3.5">
+                  <span
+                    class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-label-caps text-[11px] font-bold"
+                    :class="unit.stream_status === 'live' ? 'bg-action-green/20 text-on-tertiary-fixed' : 'bg-surface-container-high text-outline'"
+                  >
+                    <span class="h-1.5 w-1.5 rounded-full" :class="unit.stream_status === 'live' ? 'bg-action-green' : 'bg-outline'" />
+                    {{ unit.stream_status === 'live' ? 'In field' : unit.stream_status }}
+                  </span>
+                </td>
+                <td class="px-4 py-3.5 text-right">
+                  <button
+                    class="inline-flex h-8 items-center justify-center rounded-lg bg-surface-container px-3 font-button-text text-xs font-semibold text-primary transition hover:bg-surface-container-high"
+                    type="button"
+                    @click="setTab('feeds')"
+                  >
+                    Open
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="!dispatchRows.length">
+                <td colspan="6" class="px-4 py-8 text-center text-on-surface-variant">No polling units in this scope.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between border-t border-surface-container-low bg-surface-container-lowest p-4">
+          <span class="font-label-caps text-xs text-outline">Showing {{ dispatchRows.length }} of {{ scopedUnits.length }} units</span>
+          <button
+            class="inline-flex h-8 items-center justify-center rounded-lg bg-deep-navy px-3 font-button-text text-xs font-semibold text-pure-white transition hover:bg-primary"
+            type="button"
+            @click="setTab('feeds')"
+          >
+            View more
+          </button>
+        </div>
+      </section>
     </section>
 
-    <section v-else-if="activeTab === 'agents'" class="ui-card overflow-hidden">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
-        <div>
-          <h2 class="font-semibold text-ui-text">Field agents</h2>
-          <p class="text-xs text-ui-muted">
-            {{ filteredAgents.length }} of {{ scopedAgents.length }} agent(s)
-            <span v-if="stateScopeFilter !== 'all'"> · {{ stateScopeFilter }}</span>
-          </p>
-        </div>
-        <input
-          v-model="agentSearch"
-          type="search"
-          placeholder="Search name, email, state, LGA, ward…"
-          class="ui-input w-full max-w-xs text-sm"
-        />
-      </div>
+    <section v-else-if="activeTab === 'feeds'" class="flex flex-col gap-6">
+      <AdminLiveOperationsPanel
+        :units="scopedUnits"
+        :loading="loadingUnits"
+        :count-edits="countEdits"
+        :state-scope="'Ogun State'"
+        @refresh="loadUnits"
+        @update:count="(code, value) => (countEdits[code] = value)"
+        @save-count="saveCount"
+        @force-offline="forceOffline"
+        @delete="deleteUnit"
+      />
+    </section>
 
-      <div v-if="admin?.role === 'super_admin' && pendingAccreditations.length" class="border-b border-ui-border/40 bg-amber-500/5 p-5">
-        <h3 class="text-sm font-semibold text-ui-text">
+    <section v-else-if="activeTab === 'snaps'" class="flex flex-col gap-6">
+      <AdminMediaAssetsPanel
+        :state-scope="'Ogun State'"
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
+    </section>
+
+    <section v-else-if="activeTab === 'recordings'" class="flex flex-col gap-6">
+      <AdminFieldCanvassingPanel
+        :state-scope="'Ogun State'"
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
+    </section>
+
+    <section v-else-if="activeTab === 'agents'" class="flex flex-col gap-6">
+      <AdminCrmDirectory
+        :state-scope="'Ogun State'"
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+        @open-agent="openAgentModal"
+      />
+
+      <div v-if="admin?.role === 'super_admin' && pendingAccreditations.length" class="overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
+        <div class="border-b border-outline-variant/40 bg-secondary-fixed/20 p-5">
+        <h3 class="text-sm font-semibold text-primary">
           Pending accreditation review ({{ pendingAccreditations.length }})
         </h3>
         <ul class="mt-3 space-y-3">
           <li
             v-for="row in pendingAccreditations"
             :key="row.agent_id"
-            class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ui-border/40 bg-ui-surface p-3"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-outline-variant/40 bg-surface-container-low p-3"
           >
             <div class="min-w-0">
-              <p class="text-sm font-medium text-ui-text">{{ row.agent_name }}</p>
-              <p class="text-xs text-ui-muted">
+              <p class="text-sm font-medium text-primary">{{ row.agent_name }}</p>
+              <p class="text-xs text-outline">
                 {{ row.agent_email }} · {{ row.ward }}, {{ row.lga }}
                 <span v-if="row.party_name"> · {{ row.party_name }}</span>
                 <span v-if="row.accreditation_number"> · #{{ row.accreditation_number }}</span>
@@ -362,14 +499,14 @@
             <div class="flex items-center gap-2">
               <button
                 type="button"
-                class="rounded-lg border border-ui-border/40 px-3 py-1.5 text-xs text-ui-text hover:bg-ui-elevated/40"
+                class="rounded-lg border border-outline-variant/40 px-3 py-1.5 text-xs text-primary hover:bg-surface-container"
                 @click="viewAccreditationDocument(row.agent_id)"
               >
                 View document
               </button>
               <button
                 type="button"
-                class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-emerald-500"
+                class="rounded-lg bg-action-green px-3 py-1.5 text-xs text-primary hover:opacity-90"
                 :disabled="accreditationActionBusy === row.agent_id"
                 @click="approveAccreditation(row.agent_id)"
               >
@@ -377,7 +514,7 @@
               </button>
               <button
                 type="button"
-                class="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white hover:bg-red-500"
+                class="rounded-lg bg-error px-3 py-1.5 text-xs text-on-primary hover:opacity-90"
                 :disabled="accreditationActionBusy === row.agent_id"
                 @click="rejectAccreditation(row.agent_id)"
               >
@@ -386,52 +523,92 @@
             </div>
           </li>
         </ul>
-        <p v-if="accreditationActionError" class="mt-3 text-sm text-red-500">{{ accreditationActionError }}</p>
+        <p v-if="accreditationActionError" class="mt-3 text-sm text-error">{{ accreditationActionError }}</p>
+        </div>
       </div>
 
-      <div v-if="loadingAgents" class="p-8 text-center text-sm text-ui-muted">Loading…</div>
-      <div v-else-if="!filteredAgents.length" class="p-8 text-center text-sm text-ui-muted">No agents match your search.</div>
+      <div class="overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/30 px-5 py-4">
+          <div>
+            <h2 class="font-semibold text-primary">Field agent accounts</h2>
+            <p class="text-xs text-outline">
+              {{ filteredAgents.length }} of {{ scopedAgents.length }} agent(s)
+              <span v-if="stateScopeFilter !== 'all'"> · {{ stateScopeFilter }}</span>
+            </p>
+          </div>
+          <input
+            v-model="agentSearch"
+            type="search"
+            placeholder="Search name, email, state, LGA, ward…"
+            class="w-full max-w-xs rounded-xl bg-off-white px-3 py-2 text-sm text-on-surface focus:outline-none"
+          />
+        </div>
 
-      <div v-else class="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        <button
-          v-for="agent in filteredAgents"
-          :key="agent.id"
-          type="button"
-          class="rounded-xl border border-ui-border/40 bg-ui-elevated/30 p-4 text-left transition hover:border-violet-500/40 hover:bg-ui-elevated/50"
-          @click="openAgentModal(agent.id)"
-        >
-          <p class="truncate font-medium text-ui-text">{{ agent.name }}</p>
-          <p class="truncate text-xs text-ui-muted">{{ agent.email }}</p>
-          <p v-if="agent.state || agent.lga" class="mt-2 truncate text-xs text-emerald-600 dark:text-emerald-400">
-            <span v-if="agent.state" class="font-semibold">{{ agent.state }}</span>
-            <span v-if="agent.state && agent.lga"> · </span>
-            <span v-if="agent.lga">{{ agent.lga }}</span>
-            <span v-if="agent.ward"> · {{ agent.ward }}</span>
-          </p>
-          <p v-else class="mt-2 text-xs text-amber-600 dark:text-amber-400">Unassigned</p>
-          <dl class="mt-3 grid grid-cols-3 gap-2 text-xs">
-            <div class="rounded bg-ui-surface/50 px-2 py-1">
-              <dt class="text-ui-muted">Units</dt>
-              <dd class="font-semibold text-ui-text">{{ agent.polling_unit_count }}</dd>
-            </div>
-            <div class="rounded bg-ui-surface/50 px-2 py-1">
-              <dt class="text-ui-muted">Live</dt>
-              <dd class="font-semibold text-red-600 dark:text-red-400">{{ agent.live_unit_count }}</dd>
-            </div>
-            <div class="rounded bg-ui-surface/50 px-2 py-1">
-              <dt class="text-ui-muted">Data</dt>
-              <dd class="font-semibold text-ui-text">
-                {{ agent.data_claims_used ?? 0 }}/{{ agent.data_claim_limit ?? 1 }}
-              </dd>
-            </div>
-          </dl>
-          <p class="mt-3 text-[10px] text-violet-600 dark:text-violet-400">Manage →</p>
-        </button>
+        <div v-if="loadingAgents" class="p-8 text-center text-sm text-outline">Loading…</div>
+        <div v-else-if="!filteredAgents.length" class="p-8 text-center text-sm text-outline">No agents match your search.</div>
+
+        <div v-else class="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <button
+            v-for="agent in filteredAgents"
+            :key="agent.id"
+            type="button"
+            class="rounded-xl bg-surface-container-low p-4 text-left transition hover:bg-surface-container"
+            @click="openAgentModal(agent.id)"
+          >
+            <p class="truncate font-medium text-primary">{{ agent.name }}</p>
+            <p class="truncate text-xs text-outline">{{ agent.email }}</p>
+            <p v-if="agent.state || agent.lga" class="mt-2 truncate text-xs text-action-green">
+              <span v-if="agent.state" class="font-semibold">{{ agent.state }}</span>
+              <span v-if="agent.state && agent.lga"> · </span>
+              <span v-if="agent.lga">{{ agent.lga }}</span>
+              <span v-if="agent.ward"> · {{ agent.ward }}</span>
+            </p>
+            <p v-else class="mt-2 text-xs text-secondary">Unassigned</p>
+            <dl class="mt-3 grid grid-cols-3 gap-2 text-xs">
+              <div class="rounded bg-surface-container-lowest px-2 py-1">
+                <dt class="text-outline">Units</dt>
+                <dd class="font-semibold text-primary">{{ agent.polling_unit_count }}</dd>
+              </div>
+              <div class="rounded bg-surface-container-lowest px-2 py-1">
+                <dt class="text-outline">Live</dt>
+                <dd class="font-semibold text-secondary">{{ agent.live_unit_count }}</dd>
+              </div>
+              <div class="rounded bg-surface-container-lowest px-2 py-1">
+                <dt class="text-outline">Data</dt>
+                <dd class="font-semibold text-primary">
+                  {{ agent.data_claims_used ?? 0 }}/{{ agent.data_claim_limit ?? 1 }}
+                </dd>
+              </div>
+            </dl>
+            <p class="mt-3 text-[10px] text-secondary">Manage →</p>
+          </button>
+        </div>
       </div>
+    </section>
+
+    <section v-else-if="activeTab === 'sms-analytics'" class="flex flex-col gap-6">
+      <AdminCrmSmsAnalyticsPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
     </section>
 
     <section v-else-if="activeTab === 'disbursements'">
       <AdminDisbursementsPanel @error="(msg: string) => (actionError = msg)" @message="(msg: string) => (message = msg)" />
+    </section>
+
+    <section v-else-if="activeTab === 'chapters'" class="flex flex-col gap-6">
+      <AdminRegionalChaptersPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
+    </section>
+
+    <section v-else-if="activeTab === 'payment-gateways'" class="flex flex-col gap-6">
+      <AdminPaymentGatewaysPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
     </section>
 
     <section v-else-if="activeTab === 'packages'">
@@ -442,350 +619,18 @@
       <AdminInboxPanel @error="(msg: string) => (actionError = msg)" @message="(msg: string) => (message = msg)" />
     </section>
 
-    <section v-else-if="activeTab === 'data'" class="space-y-4">
-      <div class="ui-card p-5">
-        <div class="flex flex-wrap items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h2 class="font-semibold text-ui-text">Strict rule</h2>
-            <p class="mt-1 text-xs text-ui-muted">
-              When on, a phone number can claim data <strong>only once</strong>. Repeat attempts are blocked.
-            </p>
-          </div>
-          <label class="inline-flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              class="peer sr-only"
-              :checked="appSettings.strict_one_data_claim_per_phone"
-              :disabled="savingSettings"
-              @change="saveAppSettings({ strict_one_data_claim_per_phone: ($event.target as HTMLInputElement).checked })"
-            />
-            <span
-              class="relative h-6 w-11 rounded-full bg-ui-muted/30 transition peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5"
-            />
-            <span class="text-xs font-medium text-ui-text">
-              {{ appSettings.strict_one_data_claim_per_phone ? "Active" : "Inactive" }}
-            </span>
-          </label>
-        </div>
-      </div>
-
-      <div class="ui-card p-5">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 class="font-semibold text-ui-text">Agent data credit (VTpass)</h2>
-            <p class="mt-1 text-xs text-ui-muted">
-              Load plans from VTpass, then enable only the ones agents may claim.
-            </p>
-          </div>
-          <div class="flex flex-col items-end gap-1.5">
-            <span
-              class="rounded-full px-2 py-1 text-xs font-semibold"
-              :class="vtpassConfigured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'"
-            >
-              {{ vtpassConfigured ? "VTpass configured" : "VTpass not configured" }}
-            </span>
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-ui-muted">Wallet</span>
-              <span class="text-sm font-semibold text-ui-text">
-                {{
-                  loadingBalance
-                    ? "…"
-                    : vtpassBalance !== null
-                      ? `₦${vtpassBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : "—"
-                }}
-              </span>
-              <button
-                type="button"
-                class="text-[10px] uppercase tracking-wide text-sky-600 hover:underline"
-                @click="loadVtpassBalance"
-              >
-                refresh
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-4 flex flex-wrap items-end gap-3">
-          <label class="min-w-[140px]">
-            <span class="text-xs text-ui-muted">Network</span>
-            <select v-model="dataNetwork" class="ui-input mt-1" @change="loadCatalog">
-              <option v-for="n in dataNetworks" :key="n.id" :value="n.id">{{ n.label }}</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            class="rounded-lg bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-500 disabled:opacity-50"
-            :disabled="loadingCatalog || !vtpassConfigured"
-            @click="loadCatalog"
-          >
-            {{ loadingCatalog ? "Loading…" : "Load VTpass plans" }}
-          </button>
-          <button
-            type="button"
-            class="rounded-lg border border-ui-border/50 px-4 py-2 text-sm hover:bg-ui-muted/10 disabled:opacity-50"
-            :disabled="savingPlans"
-            @click="saveDataPlans"
-          >
-            {{ savingPlans ? "Saving…" : "Save enabled plans" }}
-          </button>
-        </div>
-      </div>
-
-      <div class="ui-card overflow-hidden">
-        <div class="border-b border-ui-border/40 px-5 py-3">
-          <h3 class="text-sm font-semibold text-ui-text">
-            {{ dataNetwork.toUpperCase() }} plans
-            <span class="font-normal text-ui-muted">(tick to enable for agents)</span>
-          </h3>
-        </div>
-        <div v-if="loadingCatalog" class="p-8 text-center text-sm text-ui-muted">Loading catalog…</div>
-        <div v-else-if="!catalogPlans.length" class="p-8 text-center text-sm text-ui-muted">
-          Load plans from VTpass for this network.
-        </div>
-        <ul v-else class="divide-y divide-ui-border/30 max-h-[28rem] overflow-y-auto">
-          <li
-            v-for="plan in catalogPlans"
-            :key="plan.variation_code"
-            class="flex items-center gap-3 px-5 py-3"
-          >
-            <input
-              :id="`plan-${plan.variation_code}`"
-              v-model="enabledPlanKeys"
-              type="checkbox"
-              class="h-4 w-4 rounded border-ui-border"
-              :value="planKey(plan)"
-            />
-            <label :for="`plan-${plan.variation_code}`" class="min-w-0 flex-1 cursor-pointer">
-              <p class="text-sm font-medium text-ui-text">{{ plan.name }}</p>
-              <p class="text-xs text-ui-muted">
-                {{ plan.variation_code }} · ₦{{ plan.amount.toLocaleString() }}
-              </p>
-            </label>
-          </li>
-        </ul>
-      </div>
-
-      <div class="ui-card overflow-hidden">
-        <div class="border-b border-ui-border/40 px-5 py-3 flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-ui-text">Recent credits</h3>
-          <button type="button" class="text-xs text-violet-600 hover:underline" @click="loadDataCredits">
-            Refresh
-          </button>
-        </div>
-        <div v-if="!dataCredits.length" class="p-6 text-center text-sm text-ui-muted">No credits yet.</div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-left text-sm">
-            <thead>
-              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
-                <th class="px-4 py-2">Agent</th>
-                <th class="px-4 py-2">Phone</th>
-                <th class="px-4 py-2">Plan</th>
-                <th class="px-4 py-2">Status</th>
-                <th class="px-4 py-2">When</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-ui-border/30">
-              <tr v-for="credit in dataCredits" :key="credit.id">
-                <td class="px-4 py-2">
-                  <p class="text-ui-text">{{ credit.agent_name || "—" }}</p>
-                  <p class="text-xs text-ui-muted">{{ credit.agent_email || "—" }}</p>
-                </td>
-                <td class="px-4 py-2 text-ui-muted">{{ credit.phone || "—" }} · {{ credit.network || "—" }}</td>
-                <td class="px-4 py-2">
-                  <p class="text-ui-text">{{ credit.plan_name || "—" }}</p>
-                  <p class="text-xs text-ui-muted">₦{{ (credit.amount ?? 0).toLocaleString() }}</p>
-                </td>
-                <td class="px-4 py-2">
-                  <span
-                    class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                    :class="creditStatusClass(credit.status)"
-                  >
-                    {{ credit.status || "unknown" }}
-                  </span>
-                </td>
-                <td class="px-4 py-2 text-xs text-ui-muted">{{ formatWhen(credit.created_at) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <section v-else-if="activeTab === 'data'" class="flex flex-col gap-6">
+      <AdminDataPlansPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
     </section>
 
-    <section v-else-if="activeTab === 'airtime'" class="space-y-4">
-      <div class="ui-card p-5">
-        <div class="flex flex-wrap items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h2 class="font-semibold text-ui-text">Strict rule</h2>
-            <p class="mt-1 text-xs text-ui-muted">
-              When on, a phone number can claim airtime <strong>only once</strong>. Repeat attempts are blocked.
-            </p>
-          </div>
-          <label class="inline-flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              class="peer sr-only"
-              :checked="appSettings.strict_one_airtime_claim_per_phone"
-              :disabled="savingSettings"
-              @change="saveAppSettings({ strict_one_airtime_claim_per_phone: ($event.target as HTMLInputElement).checked })"
-            />
-            <span
-              class="relative h-6 w-11 rounded-full bg-ui-muted/30 transition peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5"
-            />
-            <span class="text-xs font-medium text-ui-text">
-              {{ appSettings.strict_one_airtime_claim_per_phone ? "Active" : "Inactive" }}
-            </span>
-          </label>
-        </div>
-      </div>
-
-      <div class="ui-card p-5">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 class="font-semibold text-ui-text">Agent airtime (VTpass)</h2>
-            <p class="mt-1 text-xs text-ui-muted">
-              Control which airtime amounts agents can buy. Tick to enable, then save.
-            </p>
-          </div>
-          <div class="flex flex-col items-end gap-1.5">
-            <span
-              class="rounded-full px-2 py-1 text-xs font-semibold"
-              :class="vtpassConfigured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'"
-            >
-              {{ vtpassConfigured ? "VTpass configured" : "VTpass not configured" }}
-            </span>
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-ui-muted">Wallet</span>
-              <span class="text-sm font-semibold text-ui-text">
-                {{
-                  loadingBalance
-                    ? "…"
-                    : vtpassBalance !== null
-                      ? `₦${vtpassBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : "—"
-                }}
-              </span>
-              <button
-                type="button"
-                class="text-[10px] uppercase tracking-wide text-sky-600 hover:underline"
-                @click="loadVtpassBalance"
-              >
-                refresh
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-4 flex flex-wrap items-end gap-3">
-          <label class="min-w-[160px]">
-            <span class="text-xs text-ui-muted">Add amount (₦)</span>
-            <input
-              v-model.number="newAirtimeAmount"
-              type="number"
-              min="1"
-              step="50"
-              placeholder="e.g. 750"
-              class="ui-input mt-1"
-              @keyup.enter="addAirtimeAmount"
-            />
-          </label>
-          <button
-            type="button"
-            class="rounded-lg border border-ui-border/50 px-4 py-2 text-sm hover:bg-ui-muted/10"
-            @click="addAirtimeAmount"
-          >
-            Add amount
-          </button>
-          <button
-            type="button"
-            class="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
-            :disabled="savingAirtime"
-            @click="saveAirtimeAmounts"
-          >
-            {{ savingAirtime ? "Saving…" : "Save amounts" }}
-          </button>
-        </div>
-      </div>
-
-      <div class="ui-card overflow-hidden">
-        <div class="border-b border-ui-border/40 px-5 py-3">
-          <h3 class="text-sm font-semibold text-ui-text">
-            Airtime amounts
-            <span class="font-normal text-ui-muted">(tick to enable for agents)</span>
-          </h3>
-        </div>
-        <div v-if="loadingAirtime" class="p-8 text-center text-sm text-ui-muted">Loading amounts…</div>
-        <div v-else-if="!airtimeAmounts.length" class="p-8 text-center text-sm text-ui-muted">
-          No amounts yet. Add one above.
-        </div>
-        <ul v-else class="divide-y divide-ui-border/30 max-h-[28rem] overflow-y-auto">
-          <li
-            v-for="opt in airtimeAmounts"
-            :key="opt.amount"
-            class="flex items-center gap-3 px-5 py-3"
-          >
-            <input
-              :id="`airtime-${opt.amount}`"
-              v-model="opt.enabled"
-              type="checkbox"
-              class="h-4 w-4 rounded border-ui-border"
-            />
-            <label :for="`airtime-${opt.amount}`" class="min-w-0 flex-1 cursor-pointer">
-              <p class="text-sm font-medium text-ui-text">₦{{ opt.amount.toLocaleString() }}</p>
-              <p class="text-xs text-ui-muted">{{ opt.enabled ? "Enabled" : "Disabled" }}</p>
-            </label>
-            <button
-              type="button"
-              class="rounded-lg border border-red-500/40 px-2.5 py-1 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
-              @click="removeAirtimeAmount(opt.amount)"
-            >
-              Remove
-            </button>
-          </li>
-        </ul>
-      </div>
-
-      <div class="ui-card overflow-hidden">
-        <div class="border-b border-ui-border/40 px-5 py-3 flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-ui-text">Recent airtime</h3>
-          <button type="button" class="text-xs text-amber-600 hover:underline" @click="loadAirtimeCredits">
-            Refresh
-          </button>
-        </div>
-        <div v-if="!airtimeCredits.length" class="p-6 text-center text-sm text-ui-muted">No airtime yet.</div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-left text-sm">
-            <thead>
-              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
-                <th class="px-4 py-2">Agent</th>
-                <th class="px-4 py-2">Phone</th>
-                <th class="px-4 py-2">Amount</th>
-                <th class="px-4 py-2">Status</th>
-                <th class="px-4 py-2">When</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-ui-border/30">
-              <tr v-for="credit in airtimeCredits" :key="credit.id">
-                <td class="px-4 py-2">
-                  <p class="text-ui-text">{{ credit.agent_name || "—" }}</p>
-                  <p class="text-xs text-ui-muted">{{ credit.agent_email || "—" }}</p>
-                </td>
-                <td class="px-4 py-2 text-ui-muted">{{ credit.phone || "—" }} · {{ credit.network || "—" }}</td>
-                <td class="px-4 py-2 text-ui-text">₦{{ (credit.amount ?? 0).toLocaleString() }}</td>
-                <td class="px-4 py-2">
-                  <span
-                    class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                    :class="creditStatusClass(credit.status)"
-                  >
-                    {{ credit.status || "unknown" }}
-                  </span>
-                </td>
-                <td class="px-4 py-2 text-xs text-ui-muted">{{ formatWhen(credit.created_at) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <section v-else-if="activeTab === 'airtime'" class="flex flex-col gap-6">
+      <AdminAirtimePanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
     </section>
 
     <section v-else-if="activeTab === 'audit'">
@@ -799,274 +644,19 @@
       />
     </section>
 
-    <section v-else-if="activeTab === 'votes'" class="space-y-4">
-      <div class="ui-card p-5">
-        <div class="flex flex-wrap items-start justify-between gap-3">
+    <section v-else-if="activeTab === 'votes'" class="flex flex-col gap-6">
+      <AdminVoteResultsPanel
+        :state-scope="'Ogun State'"
+        :show-state-scope="false"
+        @error="(msg: string) => (actionError = msg)"
+        @loaded="onVoteResultsLoaded"
+      />
+
+      <div class="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-outline-variant/30 px-5 py-4">
           <div>
-            <h2 class="font-semibold text-ui-text">Vote results — simple overview</h2>
-            <p class="mt-1 text-sm text-ui-muted">
-              These numbers come from agents typing results at each polling unit. We also compare them with the people counted on site.
-            </p>
-          </div>
-          <button
-            type="button"
-            class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10"
-            :disabled="loadingVotes"
-            @click="loadVoteResults"
-          >
-            {{ loadingVotes ? "Loading…" : "Refresh" }}
-          </button>
-        </div>
-
-        <div v-if="loadingVotes && !voteSummary" class="mt-4 text-sm text-ui-muted">Loading vote results…</div>
-        <template v-else-if="filteredVoteSummary">
-          <div class="mt-4 rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 text-sm leading-relaxed text-ui-text">
-            {{ filteredVoteSummary.plain_summary }}
-          </div>
-
-          <div
-            v-if="showStateScopeFilter && stateScopeFilter === 'all' && filteredVoteSummary.by_state?.length"
-            class="mt-4 grid gap-3 sm:grid-cols-2"
-          >
-            <div
-              v-for="st in filteredVoteSummary.by_state"
-              :key="st.state"
-              class="rounded-lg border border-ui-border/40 p-4"
-            >
-              <p class="text-[10px] uppercase tracking-wider text-ui-muted">{{ st.state }}</p>
-              <p class="mt-1 text-2xl font-bold text-violet-600 dark:text-violet-400">
-                {{ st.votes.toLocaleString() }}
-              </p>
-              <p class="mt-1 text-xs text-ui-muted">
-                {{ st.unit_count }} unit(s) · {{ st.people_count.toLocaleString() }} people counted
-              </p>
-            </div>
-          </div>
-
-          <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="rounded-lg border border-ui-border/40 p-4">
-              <p class="text-[10px] uppercase tracking-wider text-ui-muted">Total votes</p>
-              <p class="mt-1 text-2xl font-bold text-violet-600 dark:text-violet-400">
-                {{ filteredVoteSummary.total_votes.toLocaleString() }}
-              </p>
-            </div>
-            <div class="rounded-lg border border-ui-border/40 p-4">
-              <p class="text-[10px] uppercase tracking-wider text-ui-muted">Units with results</p>
-              <p class="mt-1 text-2xl font-bold text-ui-text">{{ filteredVoteSummary.units_with_results.toLocaleString() }}</p>
-            </div>
-            <div class="rounded-lg border border-ui-border/40 p-4">
-              <p class="text-[10px] uppercase tracking-wider text-ui-muted">People counted there</p>
-              <p class="mt-1 text-2xl font-bold text-ui-text">{{ filteredVoteSummary.total_people_counted.toLocaleString() }}</p>
-            </div>
-            <div class="rounded-lg border border-ui-border/40 p-4">
-              <p class="text-[10px] uppercase tracking-wider text-ui-muted">Votes vs people</p>
-              <p class="mt-1 text-2xl font-bold text-ui-text">
-                {{ filteredVoteSummary.overall_difference > 0 ? "+" : "" }}{{ filteredVoteSummary.overall_difference.toLocaleString() }}
-              </p>
-            </div>
-          </div>
-          <p class="mt-3 text-xs text-ui-muted">{{ filteredVoteSummary.overall_note }}</p>
-
-          <div class="mt-5 grid gap-3 sm:grid-cols-2">
-            <div class="rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-4">
-              <p class="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Highest votes</p>
-              <p v-if="filteredVoteSummary.highest_unit" class="mt-2 text-sm text-ui-text">
-                Polling unit: <strong>{{ filteredVoteSummary.highest_unit.name }}</strong>
-                ({{ filteredVoteSummary.highest_unit.state }}, {{ filteredVoteSummary.highest_unit.ward }}, {{ filteredVoteSummary.highest_unit.lga }}) —
-                {{ filteredVoteSummary.highest_unit.votes.toLocaleString() }} votes
-                vs {{ filteredVoteSummary.highest_unit.people_count.toLocaleString() }} people
-              </p>
-              <p v-if="filteredVoteSummary.highest_ward" class="mt-1 text-xs text-ui-muted">
-                Highest ward: {{ filteredVoteSummary.highest_ward.label }} — {{ filteredVoteSummary.highest_ward.votes.toLocaleString() }} votes
-              </p>
-              <p v-if="filteredVoteSummary.highest_lga" class="mt-1 text-xs text-ui-muted">
-                Highest LGA: {{ filteredVoteSummary.highest_lga.lga }}
-                <span v-if="filteredVoteSummary.highest_lga.state">({{ filteredVoteSummary.highest_lga.state }})</span>
-                — {{ filteredVoteSummary.highest_lga.votes.toLocaleString() }} votes
-              </p>
-            </div>
-            <div class="rounded-lg border border-amber-500/25 bg-amber-500/5 p-4">
-              <p class="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">Lowest votes</p>
-              <p v-if="filteredVoteSummary.lowest_unit" class="mt-2 text-sm text-ui-text">
-                Polling unit: <strong>{{ filteredVoteSummary.lowest_unit.name }}</strong>
-                ({{ filteredVoteSummary.lowest_unit.state }}, {{ filteredVoteSummary.lowest_unit.ward }}, {{ filteredVoteSummary.lowest_unit.lga }}) —
-                {{ filteredVoteSummary.lowest_unit.votes.toLocaleString() }} votes
-                vs {{ filteredVoteSummary.lowest_unit.people_count.toLocaleString() }} people
-              </p>
-              <p v-if="filteredVoteSummary.lowest_ward" class="mt-1 text-xs text-ui-muted">
-                Lowest ward: {{ filteredVoteSummary.lowest_ward.label }} — {{ filteredVoteSummary.lowest_ward.votes.toLocaleString() }} votes
-              </p>
-              <p v-if="filteredVoteSummary.lowest_lga" class="mt-1 text-xs text-ui-muted">
-                Lowest LGA: {{ filteredVoteSummary.lowest_lga.lga }}
-                <span v-if="filteredVoteSummary.lowest_lga.state">({{ filteredVoteSummary.lowest_lga.state }})</span>
-                — {{ filteredVoteSummary.lowest_lga.votes.toLocaleString() }} votes
-              </p>
-            </div>
-          </div>
-        </template>
-        <p v-else class="mt-4 text-sm text-ui-muted">No vote results yet.</p>
-      </div>
-
-      <div class="ui-card overflow-hidden">
-        <div class="flex flex-wrap gap-2 border-b border-ui-border/40 px-5 py-3">
-          <button
-            v-for="opt in [
-              { id: 'units', label: 'By polling unit' },
-              { id: 'lgas', label: 'By local government' },
-              { id: 'wards', label: 'By ward' },
-            ] as const"
-            :key="opt.id"
-            type="button"
-            class="rounded-lg px-3 py-1.5 text-xs font-medium transition"
-            :class="voteDetailTab === opt.id ? 'bg-violet-600 text-white' : 'text-ui-muted hover:bg-ui-muted/10'"
-            @click="voteDetailTab = opt.id"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-
-        <div v-if="!filteredVoteSummary?.by_polling_unit?.length" class="p-8 text-center text-sm text-ui-muted">
-          Waiting for agents to submit results.
-        </div>
-
-        <div v-else-if="voteDetailTab === 'units'" class="overflow-x-auto">
-          <table class="w-full text-left text-sm">
-            <thead>
-              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
-                <th class="px-4 py-2">Polling unit</th>
-                <th class="px-4 py-2">State</th>
-                <th class="px-4 py-2">Ward</th>
-                <th class="px-4 py-2">LGA</th>
-                <th class="px-4 py-2 text-right">Votes</th>
-                <th class="px-4 py-2 text-right">People counted</th>
-                <th class="px-4 py-2 text-right">Difference</th>
-                <th class="px-4 py-2">What this means</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-ui-border/30">
-              <tr v-for="row in filteredVoteSummary.by_polling_unit" :key="`${row.state}-${row.code}`">
-                <td class="px-4 py-2">
-                  <p class="font-medium text-ui-text">{{ row.name }}</p>
-                  <p class="text-xs text-ui-muted">{{ row.code }}</p>
-                </td>
-                <td class="px-4 py-2 font-medium text-ui-text">{{ row.state || "—" }}</td>
-                <td class="px-4 py-2 text-ui-muted">{{ row.ward || "—" }}</td>
-                <td class="px-4 py-2 text-ui-muted">{{ row.lga || "—" }}</td>
-                <td class="px-4 py-2 text-right font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</td>
-                <td class="px-4 py-2 text-right text-ui-muted">{{ row.people_count.toLocaleString() }}</td>
-                <td class="px-4 py-2 text-right" :class="row.difference === 0 ? 'text-emerald-600' : 'text-amber-600'">
-                  {{ row.difference > 0 ? "+" : "" }}{{ row.difference.toLocaleString() }}
-                </td>
-                <td class="px-4 py-2 text-xs text-ui-muted max-w-xs">{{ row.comparison_note }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div v-else-if="voteDetailTab === 'lgas'" class="overflow-x-auto">
-          <table class="w-full text-left text-sm">
-            <thead>
-              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
-                <th class="px-4 py-2">State</th>
-                <th class="px-4 py-2">Local government</th>
-                <th class="px-4 py-2 text-right">Units</th>
-                <th class="px-4 py-2 text-right">Votes</th>
-                <th class="px-4 py-2 text-right">People counted</th>
-                <th class="px-4 py-2 text-right">Difference</th>
-                <th class="px-4 py-2">What this means</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-ui-border/30">
-              <tr v-for="row in filteredVoteSummary.by_lga" :key="`${row.state}-${row.lga}`">
-                <td class="px-4 py-2 font-medium text-ui-text">{{ row.state || "—" }}</td>
-                <td class="px-4 py-2 font-medium text-ui-text">{{ row.lga }}</td>
-                <td class="px-4 py-2 text-right text-ui-muted">{{ row.unit_count }}</td>
-                <td class="px-4 py-2 text-right font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</td>
-                <td class="px-4 py-2 text-right text-ui-muted">{{ row.people_count.toLocaleString() }}</td>
-                <td class="px-4 py-2 text-right" :class="row.difference === 0 ? 'text-emerald-600' : 'text-amber-600'">
-                  {{ row.difference > 0 ? "+" : "" }}{{ row.difference.toLocaleString() }}
-                </td>
-                <td class="px-4 py-2 text-xs text-ui-muted max-w-xs">{{ row.comparison_note }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-left text-sm">
-            <thead>
-              <tr class="border-b border-ui-border/30 text-xs uppercase text-ui-muted">
-                <th class="px-4 py-2">State</th>
-                <th class="px-4 py-2">Ward</th>
-                <th class="px-4 py-2">LGA</th>
-                <th class="px-4 py-2 text-right">Units</th>
-                <th class="px-4 py-2 text-right">Votes</th>
-                <th class="px-4 py-2 text-right">People counted</th>
-                <th class="px-4 py-2 text-right">Difference</th>
-                <th class="px-4 py-2">What this means</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-ui-border/30">
-              <tr v-for="row in filteredVoteSummary.by_ward" :key="`${row.state}-${row.label}`">
-                <td class="px-4 py-2 font-medium text-ui-text">{{ row.state || "—" }}</td>
-                <td class="px-4 py-2 font-medium text-ui-text">{{ row.ward }}</td>
-                <td class="px-4 py-2 text-ui-muted">{{ row.lga }}</td>
-                <td class="px-4 py-2 text-right text-ui-muted">{{ row.unit_count }}</td>
-                <td class="px-4 py-2 text-right font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</td>
-                <td class="px-4 py-2 text-right text-ui-muted">{{ row.people_count.toLocaleString() }}</td>
-                <td class="px-4 py-2 text-right" :class="row.difference === 0 ? 'text-emerald-600' : 'text-amber-600'">
-                  {{ row.difference > 0 ? "+" : "" }}{{ row.difference.toLocaleString() }}
-                </td>
-                <td class="px-4 py-2 text-xs text-ui-muted max-w-xs">{{ row.comparison_note }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div v-if="flaggedUnits.length" class="ui-card overflow-hidden border-red-500/30">
-        <div class="border-b border-ui-border/40 px-5 py-4">
-          <h2 class="font-semibold text-ui-text">Flagged for review ({{ flaggedUnits.length }})</h2>
-          <p class="mt-1 text-xs text-ui-muted">
-            Polling units with an open discrepancy — over-voting, a figure mismatch, or a missing
-            IReV upload. Prioritized worklist for tribunal preparation.
-          </p>
-        </div>
-        <ul class="divide-y divide-ui-border/30">
-          <li
-            v-for="unit in flaggedUnits"
-            :key="unit.code"
-            class="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
-          >
-            <div>
-              <p class="text-sm font-medium text-ui-text">{{ unit.polling_unit_name }}</p>
-              <p class="text-xs text-ui-muted">{{ unit.code }} · {{ unit.state }} · {{ unit.ward }}, {{ unit.lga }}</p>
-              <p class="mt-1 flex flex-wrap gap-1">
-                <span
-                  v-for="flag in unit.flags"
-                  :key="flag"
-                  class="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-600"
-                >
-                  {{ flag.replace("_", " ") }}
-                </span>
-              </p>
-            </div>
-            <NuxtLink
-              :to="`/admin/polling-units/${unit.code}/tribunal-report`"
-              target="_blank"
-              class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500"
-            >
-              Open report
-            </NuxtLink>
-          </li>
-        </ul>
-      </div>
-
-      <div class="ui-card overflow-hidden">
-        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-ui-border/40 px-5 py-4">
-          <div>
-            <h2 class="font-semibold text-ui-text">EC8A result sheets (photo evidence)</h2>
-            <p class="mt-1 text-xs text-ui-muted">
+            <h2 class="font-headline-md text-lg font-bold text-primary">EC8A result sheets (photo evidence)</h2>
+            <p class="mt-1 text-xs text-outline">
               Immutable, timestamped photos agents captured at each unit. Enter the official
               figure (from IReV or collation) as you confirm it — the difference is flagged
               automatically.
@@ -1074,7 +664,7 @@
           </div>
           <button
             type="button"
-            class="rounded-lg border border-ui-border/50 px-3 py-1.5 text-xs hover:bg-ui-muted/10"
+            class="rounded-xl bg-surface-container px-3 py-1.5 text-xs text-on-surface hover:bg-surface-container-high"
             :disabled="loadingResultSheets"
             @click="loadResultSheets"
           >
@@ -1082,34 +672,34 @@
           </button>
         </div>
 
-        <div v-if="!resultSheets.length" class="p-8 text-center text-sm text-ui-muted">
+        <div v-if="!resultSheets.length" class="p-8 text-center text-sm text-outline">
           No result sheets submitted yet.
         </div>
-        <ul v-else class="divide-y divide-ui-border/30">
+        <ul v-else class="divide-y divide-outline-variant/20">
           <li
             v-for="row in resultSheets"
             :key="row.id"
             class="flex flex-wrap items-start justify-between gap-4 px-5 py-4"
           >
             <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-ui-text">
+              <p class="text-sm font-medium text-on-surface">
                 {{ row.polling_unit_name }}
                 <span
                   v-if="row.version > 1"
-                  class="ml-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                  class="ml-1 rounded-full bg-electric-pink/15 px-2 py-0.5 text-[10px] font-semibold text-electric-pink"
                 >
                   Correction #{{ row.version }}
                 </span>
                 <span
                   v-if="row.over_accreditation"
-                  class="ml-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-600"
+                  class="ml-1 rounded-full bg-error/15 px-2 py-0.5 text-[10px] font-semibold text-error"
                 >
                   Over-voting?
                 </span>
               </p>
-              <p class="text-xs text-ui-muted">{{ row.code }} · {{ row.state }} · {{ row.ward }}, {{ row.lga }}</p>
-              <p class="mt-1 text-xs text-ui-muted">
-                Votes: <span class="font-semibold text-ui-text">{{ row.votes.toLocaleString() }}</span>
+              <p class="text-xs text-outline">{{ row.code }} · {{ row.state }} · {{ row.ward }}, {{ row.lga }}</p>
+              <p class="mt-1 text-xs text-outline">
+                Votes: <span class="font-semibold text-on-surface">{{ row.votes.toLocaleString() }}</span>
                 <span v-if="row.accredited_voters !== null">
                   · Accredited: {{ row.accredited_voters?.toLocaleString() }}
                 </span>
@@ -1120,11 +710,11 @@
               <p
                 v-if="row.discrepancy_note"
                 class="mt-1 text-xs"
-                :class="row.official_diff ? 'text-red-600' : 'text-emerald-600'"
+                :class="row.official_diff ? 'text-error' : 'text-action-green'"
               >
                 {{ row.discrepancy_note }}
               </p>
-              <p class="mt-0.5 text-[10px] text-ui-muted">
+              <p class="mt-0.5 text-[10px] text-outline">
                 Captured {{ formatWhen(row.received_at) }}
                 <span v-if="row.captured_lat !== null"> · GPS logged</span>
                 · Hash {{ row.sha256.slice(0, 10) }}…
@@ -1286,11 +876,12 @@
       @updated="onAgentUpdated"
       @deleted="onAgentDeleted"
     />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { feedSnapImageUrl, groupSnapsByLgaAndWard } from "~/composables/useFeedSnaps";
+import { ADMIN_NAV } from "~/composables/useAdminShell";
 import type { PollingUnit } from "~/composables/useVideoFeeds";
 import type { AdminOverview } from "~/composables/useAdminAuth";
 import type { FeedSnap } from "~/composables/useFeedSnaps";
@@ -1379,12 +970,13 @@ type FeedRecording = {
   file_size: number;
 };
 
-definePageMeta({ layout: "default" });
+definePageMeta({ layout: "admin" });
 
 const router = useRouter();
 const { admin, authHeaders, requireAdmin, clear, apiBase, refreshMe, canAccessTab } =
   useAdminAuth();
 const { lgas, loadLgas } = useOgunGeo();
+const { activeTab, searchQuery, setTab } = useAdminShell();
 
 const ALL_TABS = [
   { id: "overview", label: "Overview" },
@@ -1392,7 +984,10 @@ const ALL_TABS = [
   { id: "snaps", label: "Pictures" },
   { id: "recordings", label: "Recordings" },
   { id: "agents", label: "Agents" },
+  { id: "sms-analytics", label: "SMS Analytics" },
   { id: "disbursements", label: "Disbursements" },
+  { id: "chapters", label: "Regional Chapters" },
+  { id: "payment-gateways", label: "Payment Gateways" },
   { id: "packages", label: "Packages" },
   { id: "inbox", label: "Inbox" },
   { id: "audit", label: "Independent Audit" },
@@ -1405,8 +1000,6 @@ const ALL_TABS = [
 type TabId = (typeof ALL_TABS)[number]["id"];
 
 const visibleTabs = computed(() => ALL_TABS.filter((tab) => canAccessTab(tab.id)));
-
-const activeTab = ref<TabId>("overview");
 const overview = ref<AdminOverview | null>(null);
 const units = ref<PollingUnit[]>([]);
 const snaps = ref<FeedSnap[]>([]);
@@ -1445,6 +1038,14 @@ const accreditationActionBusy = ref<string | null>(null);
 const accreditationActionError = ref("");
 const message = ref("");
 const actionError = ref("");
+const toast = useToast();
+
+watch(message, (value) => {
+  if (value) toast.success(value);
+});
+watch(actionError, (value) => {
+  if (value) toast.error(value);
+});
 
 const vtpassConfigured = ref(false);
 const vtpassBalance = ref<number | null>(null);
@@ -1554,20 +1155,15 @@ type FlaggedUnit = {
 const flaggedUnits = ref<FlaggedUnit[]>([]);
 const officialFigureDrafts = reactive<Record<string, number | null>>({});
 const savingOfficialFigure = ref<string | null>(null);
-const stateScopeFilter = ref<"all" | "Ogun State">("all");
+const stateScopeFilter = ref<"all" | "Ogun State">("Ogun State");
 
-const showStateScopeFilter = computed(
-  () => (admin.value?.role || "super_admin") === "super_admin",
-);
-
-const stateScopeFilters = [
-  { id: "all" as const, label: "All states" },
-  { id: "Ogun State" as const, label: "Ogun only" },
-];
+/** Ogun-only deployment — multi-state scope UI removed. */
+const showStateScopeFilter = computed(() => false);
 
 function matchesStateScope(state: string | null | undefined) {
-  if (!showStateScopeFilter.value || stateScopeFilter.value === "all") return true;
-  return (state || "").trim() === stateScopeFilter.value;
+  const s = (state || "").trim();
+  if (!s) return true;
+  return s === "Ogun State" || /ogun/i.test(s);
 }
 
 const scopedUnits = computed(() => units.value.filter((u) => matchesStateScope(u.state)));
@@ -1750,8 +1346,6 @@ function creditStatusClass(status?: string | null) {
   return "bg-amber-500/15 text-amber-600";
 }
 
-const snapsByLga = computed(() => groupSnapsByLgaAndWard(scopedSnaps.value));
-
 const filteredAgents = computed(() => {
   const q = agentSearch.value.trim().toLowerCase();
   const list = scopedAgents.value;
@@ -1809,6 +1403,184 @@ const overviewStats = computed(() => {
   ];
 });
 
+const currentNavLabel = computed(
+  () => ADMIN_NAV.find((item) => item.id === activeTab.value)?.label ?? "Overview",
+);
+const pageTitle = computed(() => {
+  if (activeTab.value === "overview") return "Global mission operations";
+  if (activeTab.value === "agents") return "Supporter & Voter Directory";
+  if (activeTab.value === "recordings") return "Field Canvassing & Turf Command";
+  if (activeTab.value === "sms-analytics") return "SMS Delivery & Response Analytics";
+  if (activeTab.value === "disbursements") return "Fundraising & Donor Capital Command";
+  if (activeTab.value === "chapters") return "Ogun Chapter Budget & Configuration";
+  if (activeTab.value === "payment-gateways") return "Payment Gateway Configuration";
+  if (activeTab.value === "packages") return "Package Distribution Command";
+  if (activeTab.value === "parties") return "Party & Candidate Registry";
+  if (activeTab.value === "votes") return "Vote Results Command";
+  if (activeTab.value === "data") return "Agent Data Credit Command";
+  if (activeTab.value === "airtime") return "Agent Airtime Command";
+  return currentNavLabel.value;
+});
+
+function formatStat(value: number | string | null | undefined) {
+  if (typeof value === "number") return value.toLocaleString();
+  if (value == null || value === "") return "—";
+  return String(value);
+}
+
+const commandLive = computed(() => {
+  if (showStateScopeFilter.value && stateScopeFilter.value !== "all") {
+    return scopedUnits.value.filter((u) => u.stream_status === "live").length;
+  }
+  return overview.value?.live_feeds ?? scopedUnits.value.filter((u) => u.stream_status === "live").length;
+});
+const commandUnits = computed(() => {
+  if (showStateScopeFilter.value && stateScopeFilter.value !== "all") return scopedUnits.value.length;
+  return overview.value?.registered_units ?? scopedUnits.value.length;
+});
+const commandPeople = computed(() => {
+  const fromUnits = scopedUnits.value
+    .filter((u) => u.stream_status === "live")
+    .reduce((sum, u) => sum + (u.people_count || 0), 0);
+  if (showStateScopeFilter.value && stateScopeFilter.value !== "all") return fromUnits;
+  return overview.value?.total_people_on_site ?? fromUnits;
+});
+const commandAgents = computed(() => {
+  if (showStateScopeFilter.value && stateScopeFilter.value !== "all") return scopedAgents.value.length;
+  return overview.value?.agents ?? scopedAgents.value.length;
+});
+const commandVotes = computed(
+  () => filteredVoteSummary.value?.total_votes ?? overview.value?.total_votes ?? 0,
+);
+const commandUnitsReported = computed(
+  () => filteredVoteSummary.value?.units_with_results ?? overview.value?.units_with_results ?? 0,
+);
+const liveSharePct = computed(() => {
+  const total = Number(commandUnits.value) || 0;
+  const live = Number(commandLive.value) || 0;
+  if (!total) return 0;
+  return Math.min(100, Math.round((live / total) * 100));
+});
+const liveShareLabel = computed(() => `${liveSharePct.value}%`);
+
+const topLgas = computed(() => {
+  const map = new Map<string, { lga: string; live: number; people: number; units: number; pct: number }>();
+  for (const unit of scopedUnits.value) {
+    const key = unit.lga || "Unassigned";
+    const row = map.get(key) || { lga: key, live: 0, people: 0, units: 0, pct: 0 };
+    row.units += 1;
+    if (unit.stream_status === "live") {
+      row.live += 1;
+      row.people += unit.people_count || 0;
+    }
+    map.set(key, row);
+  }
+  return [...map.values()]
+    .map((row) => ({ ...row, pct: row.units ? Math.round((row.live / row.units) * 100) : 0 }))
+    .sort((a, b) => b.live - a.live || b.units - a.units);
+});
+const topCluster = computed(() => topLgas.value[0] ?? null);
+
+const {
+  loading: overviewMapLoading,
+  data: overviewMapData,
+  markers: overviewMapMarkers,
+  center: overviewMapCenter,
+  load: loadOverviewMapData,
+} = useMapPollingUnits();
+
+async function refreshOverviewMap(opts: { reloadUnits?: boolean } = {}) {
+  const lga = topCluster.value?.lga;
+  await loadOverviewMapData({
+    state: "Ogun State",
+    ...(lga ? { lga } : {}),
+  });
+  if (opts.reloadUnits) await loadUnits();
+}
+
+const velocityBars = computed(() => {
+  const max = Math.max(1, ...topLgas.value.map((row) => row.units));
+  return topLgas.value.slice(0, 7).map((row) => ({
+    lga: row.lga,
+    short: row.lga.slice(0, 10),
+    live: row.live > 0,
+    height: Math.max(8, Math.round((row.units / max) * 100)),
+  }));
+});
+const dispatchRows = computed(() => {
+  const live = scopedUnits.value.filter((u) => u.stream_status === "live");
+  const rest = scopedUnits.value.filter((u) => u.stream_status !== "live");
+  return [...live, ...rest].slice(0, 8);
+});
+const criticalAlerts = computed(() => {
+  const alerts: {
+    id: string;
+    title: string;
+    body: string;
+    meta: string;
+    tone: string;
+    action?: () => void;
+    actionLabel?: string;
+  }[] = [];
+  for (const row of pendingAccreditations.value.slice(0, 2)) {
+    alerts.push({
+      id: `acc-${row.agent_id}`,
+      title: "Accreditation sign-off",
+      body: `${row.agent_name} · ${row.ward || "—"}, ${row.lga || "—"}`,
+      meta: "Pending",
+      tone: "text-secondary",
+      action: () => setTab("agents"),
+      actionLabel: "Review",
+    });
+  }
+  for (const unit of flaggedUnits.value.slice(0, 2)) {
+    alerts.push({
+      id: `flag-${unit.code}`,
+      title: "Review needed",
+      body: `${unit.polling_unit_name} · ${unit.flags.join(", ")}`,
+      meta: unit.code,
+      tone: "text-error",
+      action: () => setTab("votes"),
+      actionLabel: "Open votes",
+    });
+  }
+  return alerts.slice(0, 3);
+});
+const copilotInsight = computed(() => {
+  const quiet = scopedUnits.value.filter((u) => u.stream_status !== "live").length;
+  const live = Number(commandLive.value) || 0;
+  if (!scopedUnits.value.length) {
+    return "No polling units in this scope yet. Register field units to start live telemetry.";
+  }
+  if (!live) {
+    return `${quiet} unit(s) are registered but none are streaming. Check agent relays and force-offline history.`;
+  }
+  return `${live} live stream(s) across ${topLgas.value.length} LGA(s). ${quiet} unit(s) are still offline.`;
+});
+
+function exportAuditCsv() {
+  const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const lines = [
+    ["Code", "Name", "State", "LGA", "Ward", "Status", "People"].join(","),
+    ...scopedUnits.value.map((unit) =>
+      [unit.code, unit.name, unit.state, unit.lga, unit.ward, unit.stream_status, unit.people_count]
+        .map(escape)
+        .join(","),
+    ),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "e-mobilize-units.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+watch(searchQuery, (query) => {
+  agentSearch.value = query;
+});
+
 onMounted(async () => {
   if (!requireAdmin()) return;
   await refreshMe();
@@ -1816,7 +1588,28 @@ onMounted(async () => {
     activeTab.value = visibleTabs.value[0].id;
   }
   await loadLgas();
-  await Promise.all([loadOverview(), loadUnits(), loadSnaps(), loadAgents()]);
+  await Promise.all([
+    loadOverview(),
+    loadUnits(),
+    loadSnaps(),
+    loadAgents(),
+    loadVoteResults(),
+    loadFlaggedUnits(),
+    loadResultSheets(),
+  ]);
+  if (admin.value?.role === "super_admin") {
+    loadPendingAccreditations();
+  }
+  void refreshOverviewMap();
+});
+
+watch([activeTab, stateScopeFilter], () => {
+  if (activeTab.value === "overview") void refreshOverviewMap();
+});
+
+watch(topCluster, (cluster, prev) => {
+  if (activeTab.value !== "overview") return;
+  if (cluster?.lga && cluster.lga !== prev?.lga) void refreshOverviewMap();
 });
 
 watch(activeTab, async (tab) => {
@@ -1828,27 +1621,11 @@ watch(activeTab, async (tab) => {
     if (admin.value?.role === "super_admin") loadPendingAccreditations();
   }
   if (tab === "votes") {
-    loadVoteResults();
     loadResultSheets();
-    loadFlaggedUnits();
     if (admin.value?.role === "super_admin") {
       loadAppSettings();
       loadIrevStatus();
     }
-  }
-  if (tab === "data") {
-    await loadVtpassStatus();
-    await loadVtpassBalance();
-    await loadSavedPlans();
-    await loadDataCredits();
-    await loadAppSettings();
-  }
-  if (tab === "airtime") {
-    await loadVtpassStatus();
-    await loadVtpassBalance();
-    await loadAirtimeAmounts();
-    await loadAirtimeCredits();
-    await loadAppSettings();
   }
 });
 
@@ -1891,6 +1668,10 @@ async function loadVoteResults() {
   } finally {
     loadingVotes.value = false;
   }
+}
+
+function onVoteResultsLoaded(sum: VoteResultsSummary | null) {
+  if (sum) voteSummary.value = sum;
 }
 
 async function loadResultSheets() {
@@ -2481,19 +2262,6 @@ async function deleteUnit(code: string) {
     await loadOverview();
   } catch {
     actionError.value = "Failed to delete unit.";
-  }
-}
-
-async function deleteSnap(id: string) {
-  if (!confirm("Delete this saved picture?")) return;
-  clearFeedback();
-  try {
-    await $fetch(`${apiBase}/admin/feed-snaps/${id}`, { method: "DELETE", headers: authHeaders() });
-    message.value = "Picture deleted.";
-    await loadSnaps();
-    await loadOverview();
-  } catch {
-    actionError.value = "Failed to delete picture.";
   }
 }
 </script>

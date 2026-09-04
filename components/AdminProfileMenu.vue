@@ -1,34 +1,44 @@
 <template>
   <div ref="rootEl" class="relative">
     <button
+      v-if="compact"
       type="button"
-      class="inline-flex items-center gap-2 rounded-lg border border-ui-border/60 px-3 py-2 text-sm text-ui-text hover:bg-ui-muted/10"
+      class="flex h-8 w-8 items-center justify-center rounded-full bg-deep-navy text-on-primary"
+      :aria-label="admin?.name ?? 'Admin menu'"
       @click="open = !open"
     >
-      <span class="flex h-7 w-7 items-center justify-center rounded-full bg-violet-600/20 text-xs font-semibold text-violet-600 dark:text-violet-300">
+      <span class="material-symbols-outlined text-[18px]">person</span>
+    </button>
+    <button
+      v-else
+      type="button"
+      class="inline-flex items-center gap-2 rounded-lg border border-outline-variant px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low"
+      @click="open = !open"
+    >
+      <span class="flex h-7 w-7 items-center justify-center rounded-full bg-electric-pink/15 text-xs font-semibold text-electric-pink">
         {{ initials }}
       </span>
       <span class="hidden sm:inline">{{ admin?.name ?? "Admin" }}</span>
-      <svg class="h-4 w-4 text-ui-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="h-4 w-4 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
       </svg>
     </button>
 
     <div
       v-if="open"
-      class="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-xl border border-ui-border/60 bg-ui-surface shadow-xl"
+      class="absolute right-0 z-50 mt-2 w-72 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-xl"
     >
-      <div class="border-b border-ui-border/40 px-4 py-3">
-        <p class="text-sm font-medium text-ui-text">{{ admin?.name }}</p>
-        <p class="text-xs text-ui-muted">{{ admin?.email }}</p>
-        <p class="mt-1 text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400">
+      <div class="border-b border-outline-variant px-4 py-3">
+        <p class="text-sm font-medium text-on-surface">{{ admin?.name }}</p>
+        <p class="text-xs text-on-surface-variant">{{ admin?.email }}</p>
+        <p class="mt-1 font-label-caps text-[10px] uppercase tracking-wider text-electric-pink">
           {{ admin?.role }}
         </p>
       </div>
 
       <button
         type="button"
-        class="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-ui-text hover:bg-ui-muted/10"
+        class="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-on-surface hover:bg-surface-container-low"
         @click="showPasswordForm = !showPasswordForm"
       >
         <svg class="h-4 w-4 text-ui-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,7 +54,7 @@
         <p v-if="passwordSuccess" class="text-xs text-emerald-600 dark:text-emerald-400">{{ passwordSuccess }}</p>
         <button
           type="submit"
-          class="w-full rounded-lg bg-violet-600 py-2 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+          class="w-full rounded-lg bg-electric-pink py-2 text-xs font-medium text-on-primary hover:bg-secondary disabled:opacity-50"
           :disabled="savingPassword"
         >
           {{ savingPassword ? "Updating…" : "Update password" }}
@@ -53,7 +63,7 @@
 
       <button
         type="button"
-        class="w-full border-t border-ui-border/40 px-4 py-3 text-left text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400"
+        class="w-full border-t border-outline-variant px-4 py-3 text-left text-sm text-error hover:bg-error-container"
         @click="emit('logout')"
       >
         Sign out
@@ -67,6 +77,7 @@ import type { Admin } from "~/composables/useAdminAuth";
 
 const props = defineProps<{
   admin: Admin | null;
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{ logout: [] }>();
