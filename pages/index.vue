@@ -176,6 +176,9 @@
               Coordinators manage agents, correct counts, review discrepancies against official
               figures, and hold a defensible, tamper-evident record.
             </p>
+            <NuxtLink to="/independent-audit" class="mt-3 inline-block text-sm font-medium text-violet-600 hover:underline">
+              Open Independent Audit
+            </NuxtLink>
           </article>
         </div>
       </section>

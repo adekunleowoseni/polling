@@ -430,6 +430,18 @@
       </div>
     </section>
 
+    <section v-else-if="activeTab === 'disbursements'">
+      <AdminDisbursementsPanel @error="(msg: string) => (actionError = msg)" @message="(msg: string) => (message = msg)" />
+    </section>
+
+    <section v-else-if="activeTab === 'packages'">
+      <AdminPackagesPanel @error="(msg: string) => (actionError = msg)" @message="(msg: string) => (message = msg)" />
+    </section>
+
+    <section v-else-if="activeTab === 'inbox'">
+      <AdminInboxPanel @error="(msg: string) => (actionError = msg)" @message="(msg: string) => (message = msg)" />
+    </section>
+
     <section v-else-if="activeTab === 'data'" class="space-y-4">
       <div class="ui-card p-5">
         <div class="flex flex-wrap items-start justify-between gap-4">
@@ -774,6 +786,10 @@
           </table>
         </div>
       </div>
+    </section>
+
+    <section v-else-if="activeTab === 'audit'">
+      <IndependentAuditPanel :api-base="apiBase" :auth-headers="authHeaders" />
     </section>
 
     <section v-else-if="activeTab === 'votes'" class="space-y-4">
@@ -1368,6 +1384,10 @@ const ALL_TABS = [
   { id: "snaps", label: "Pictures" },
   { id: "recordings", label: "Recordings" },
   { id: "agents", label: "Agents" },
+  { id: "disbursements", label: "Disbursements" },
+  { id: "packages", label: "Packages" },
+  { id: "inbox", label: "Inbox" },
+  { id: "audit", label: "Independent Audit" },
   { id: "votes", label: "Vote results" },
   { id: "data", label: "Data plans" },
   { id: "airtime", label: "Airtime" },
@@ -1524,7 +1544,7 @@ type FlaggedUnit = {
 const flaggedUnits = ref<FlaggedUnit[]>([]);
 const officialFigureDrafts = reactive<Record<string, number | null>>({});
 const savingOfficialFigure = ref<string | null>(null);
-const stateScopeFilter = ref<"all" | "Ogun State" | "Osun State">("all");
+const stateScopeFilter = ref<"all" | "Ogun State">("all");
 
 const showStateScopeFilter = computed(
   () => (admin.value?.role || "super_admin") === "super_admin",
@@ -1533,7 +1553,6 @@ const showStateScopeFilter = computed(
 const stateScopeFilters = [
   { id: "all" as const, label: "All states" },
   { id: "Ogun State" as const, label: "Ogun only" },
-  { id: "Osun State" as const, label: "Osun only" },
 ];
 
 function matchesStateScope(state: string | null | undefined) {
@@ -1735,7 +1754,7 @@ const filteredAgents = computed(() => {
 
 const overviewByState = computed(() => {
   if (!showStateScopeFilter.value) return [];
-  const states = ["Ogun State", "Osun State"] as const;
+  const states = ["Ogun State"] as const;
   return states.map((state) => {
     const stateUnits = units.value.filter((u) => u.state === state);
     return {
