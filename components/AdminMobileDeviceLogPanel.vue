@@ -25,7 +25,6 @@ const emit = defineEmits<{
 }>();
 
 const { authHeaders, apiBase, admin, isSuperAdmin, isImpersonating } = useAdminAuth();
-const { selectedOrgId } = useAdminOrgContext();
 
 const loading = ref(false);
 const rows = ref<MobileDeviceLogRow[]>([]);
@@ -41,7 +40,7 @@ const title = computed(() =>
 const subtitle = computed(() =>
   isSuperAdmin.value && !isImpersonating.value
     ? "Every agent, voter, member, and donor sign-in from the mobile app."
-    : "Sign-ins from mobile users who belong to this organization.",
+    : "Sign-ins from mobile users who belong to this organization (including older logins before org tagging).",
 );
 
 function formatWhen(iso: string) {
@@ -73,9 +72,8 @@ async function refresh() {
   try {
     const query: Record<string, string | number> = { limit: 250 };
     if (search.value.trim()) query.q = search.value.trim();
-    if (isSuperAdmin.value && !isImpersonating.value && selectedOrgId.value) {
-      query.org_id = selectedOrgId.value;
-    }
+    // Super admin: show all logins by default. Org filter only when impersonating
+    // (tenant scope). Do not silently hide rows via the global org dropdown.
     rows.value = await $fetch<MobileDeviceLogRow[]>(`${apiBase}/admin/mobile-device-log`, {
       headers: authHeaders(),
       query,
@@ -97,7 +95,7 @@ function onSearchInput() {
 }
 
 onMounted(() => void refresh());
-watch([selectedOrgId, isImpersonating], () => void refresh());
+watch(isImpersonating, () => void refresh());
 </script>
 
 <template>
