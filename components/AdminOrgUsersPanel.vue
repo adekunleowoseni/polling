@@ -79,6 +79,7 @@ function roleDisplay(role: string) {
   if (role === "field_agent") return "Field Agent";
   if (role === "org_admin") return "Admin";
   if (role === "org_operator") return "Operator";
+  if (role === "state_admin") return "State Admin";
   return role;
 }
 

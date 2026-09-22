@@ -59,6 +59,7 @@ export const ADMIN_NAV_GROUPS = [
       { id: "org-users", label: "Org Users & Roles", icon: "manage_accounts" },
       { id: "payment-gateways", label: "Payment Gateways", icon: "payments" },
       { id: "integrations", label: "Integrations", icon: "vpn_key" },
+      { id: "telecom", label: "Airtime & Data packs", icon: "contactless" },
       { id: "data", label: "Data Plans", icon: "sim_card" },
       { id: "airtime", label: "Airtime", icon: "phone_iphone" },
     ],

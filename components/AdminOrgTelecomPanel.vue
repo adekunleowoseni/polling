@@ -203,8 +203,11 @@ onMounted(() => void refresh());
     <header class="flex flex-col justify-between gap-3 xl:flex-row xl:items-end">
       <div>
         <h1 class="font-headline-md text-2xl font-bold tracking-tight text-primary">Airtime &amp; Data Packs</h1>
+        <p v-if="status?.org_name || admin?.org_name" class="mt-1 text-sm font-semibold text-deep-navy">
+          {{ status?.org_name || admin?.org_name }}
+        </p>
         <p class="mt-1 max-w-2xl text-sm text-on-surface-variant">
-          Organization admins request or pay for prepaid packs. After payment, enable airtime/data for agents. Claims debit the org wallet.
+          Request or pay for prepaid airtime/data packs for field agents and members. After payment, enable claims — they debit your org wallet.
         </p>
       </div>
       <button

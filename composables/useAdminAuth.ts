@@ -23,11 +23,15 @@ export const STATE_ADMIN_NAV_TABS = [
   "sms-analytics",
   "votes",
   "disbursements",
+  "budget",
   "packages",
   "inbox",
   "audit",
   "parties",
   "elective-offices",
+  "org-users",
+  "mobile-device-log",
+  "telecom",
 ] as const;
 
 export const SUPER_ADMIN_NAV_TABS = [

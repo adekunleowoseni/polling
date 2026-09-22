@@ -31,6 +31,13 @@
       <div class="border-b border-outline-variant px-4 py-3">
         <p class="text-sm font-medium text-on-surface">{{ admin?.name }}</p>
         <p class="text-xs text-on-surface-variant">{{ admin?.email }}</p>
+        <p
+          v-if="admin?.org_name"
+          class="mt-1 truncate text-xs font-medium text-deep-navy"
+          :title="admin.org_name"
+        >
+          {{ admin.org_name }}
+        </p>
         <p class="mt-1 font-label-caps text-[10px] uppercase tracking-wider text-electric-pink">
           {{ admin?.role }}
         </p>

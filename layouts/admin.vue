@@ -72,6 +72,12 @@
           </div>
           <div class="min-w-0 flex-1 truncate">
             <span class="block truncate font-button-text text-sm text-pure-white">{{ admin?.name || "Admin" }}</span>
+            <span
+              v-if="admin?.org_name"
+              class="block truncate font-label-caps text-[10px] text-pure-white/80"
+            >
+              {{ admin.org_name }}
+            </span>
             <span class="block truncate font-label-caps text-[10px] text-on-primary-container">{{ roleLabel }}</span>
           </div>
         </div>
@@ -139,6 +145,13 @@
               class="hidden max-w-xs truncate rounded-xl bg-electric-pink/10 px-3 py-2 font-label-caps text-[10px] font-bold uppercase text-electric-pink md:block"
             >
               {{ admin?.org_name || "Tenant workspace" }}
+            </div>
+            <div
+              v-else-if="admin?.org_name"
+              class="hidden max-w-xs truncate rounded-xl bg-surface-container-low px-3 py-2 font-label-caps text-[10px] font-bold uppercase text-deep-navy md:block"
+              :title="admin.org_name"
+            >
+              {{ admin.org_name }}
             </div>
             <div class="hidden items-center gap-2 rounded-full bg-surface-container-low px-3 py-1.5 md:flex">
               <span class="h-2 w-2 rounded-full bg-action-green" />
@@ -251,6 +264,7 @@ onMounted(async () => {
       openNavGroups.value = [...openNavGroups.value, id];
     }
   }
+  await refreshMe();
   if (isSuperAdmin.value) {
     await loadOrganizations();
   }

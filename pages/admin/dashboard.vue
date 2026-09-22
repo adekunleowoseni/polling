@@ -10,6 +10,10 @@
           <span class="font-label-caps text-label-caps uppercase tracking-wider text-outline">HQ Central Command</span>
           <span class="text-xs text-outline">/</span>
           <span class="font-label-caps text-label-caps font-bold uppercase tracking-wider text-secondary">{{ currentNavLabel }}</span>
+          <template v-if="workspaceOrgName">
+            <span class="text-xs text-outline">/</span>
+            <span class="font-label-caps text-label-caps font-bold uppercase tracking-wider text-deep-navy">{{ workspaceOrgName }}</span>
+          </template>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <h1 class="font-headline-md text-2xl font-bold tracking-tight text-primary sm:text-headline-md">{{ pageTitle }}</h1>
@@ -19,7 +23,7 @@
           >
             <span class="h-2 w-2 animate-ping rounded-full bg-action-green" />
             <span class="font-label-caps text-[11px] font-semibold text-on-surface">
-              <template v-if="selectedOrg">{{ selectedOrg.name }} · </template>
+              <template v-if="workspaceOrgName">{{ workspaceOrgName }} · </template>
               Live sync: {{ commandLive }} feeds · {{ Number(commandPeople || 0).toLocaleString() }} people
             </span>
           </div>
@@ -1605,10 +1609,13 @@ const overviewStats = computed(() => {
 const currentNavLabel = computed(
   () => ADMIN_NAV.find((item) => item.id === activeTab.value)?.label ?? "Overview",
 );
+const workspaceOrgName = computed(
+  () => selectedOrg.value?.name || admin.value?.org_name || overview.value?.org_name || null,
+);
 const pageTitle = computed(() => {
   if (activeTab.value === "overview") {
-    return selectedOrg.value?.name
-      ? `${selectedOrg.value.name} operations`
+    return workspaceOrgName.value
+      ? `${workspaceOrgName.value} operations`
       : "Global mission operations";
   }
   if (activeTab.value === "agents") return "Voter & supporter directory";
