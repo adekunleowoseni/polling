@@ -2,7 +2,7 @@
   <div class="flex w-full flex-col">
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6 md:p-8">
     <header
-      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'chapters' && activeTab !== 'payment-gateways' && activeTab !== 'integrations' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds' && activeTab !== 'organizations' && activeTab !== 'org-users' && activeTab !== 'audit'"
+      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'chapters' && activeTab !== 'payment-gateways' && activeTab !== 'integrations' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds' && activeTab !== 'organizations' && activeTab !== 'org-users' && activeTab !== 'audit' && activeTab !== 'mobile-device-log'"
       class="flex flex-col gap-4 pb-2 lg:flex-row lg:items-center lg:justify-between"
     >
       <div class="min-w-0 flex-1 flex flex-col gap-1.5">
@@ -754,6 +754,13 @@
       <IndependentAuditPanel :api-base="apiBase" embedded />
     </section>
 
+    <section v-else-if="activeTab === 'mobile-device-log'" class="flex flex-col gap-6">
+      <AdminMobileDeviceLogPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
+    </section>
+
     <section v-else-if="activeTab === 'organizations'">
       <AdminOrganizationsPanel
         @error="(msg: string) => (actionError = msg)"
@@ -1137,6 +1144,7 @@ const ALL_TABS = [
   { id: "packages", label: "Packages" },
   { id: "inbox", label: "Inbox" },
   { id: "audit", label: "Independent Audit" },
+  { id: "mobile-device-log", label: "Mobile Device Log" },
   { id: "organizations", label: "Organizations" },
   { id: "org-users", label: "Org Users" },
   { id: "parties", label: "Parties" },
@@ -1605,6 +1613,7 @@ const pageTitle = computed(() => {
   if (activeTab.value === "org-users") return "Org Users & Roles";
   if (activeTab.value === "payment-gateways") return "Payment Gateway Configuration";
   if (activeTab.value === "integrations") return "Integration Credentials";
+  if (activeTab.value === "mobile-device-log") return "Mobile app sign-in device audit";
   if (activeTab.value === "packages") return "Package Distribution Command";
   if (activeTab.value === "parties") return "Party & Candidate Registry";
   if (activeTab.value === "votes") return "Vote Results Command";
