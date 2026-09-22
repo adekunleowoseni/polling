@@ -44,8 +44,8 @@ export const ADMIN_NAV_GROUPS = [
     id: "fundraising",
     label: "Fundraising",
     items: [
-      { id: "disbursements", label: "Fundraising & Donors", icon: "volunteer_activism" },
-      { id: "chapters", label: "Ogun Chapter Budget", icon: "account_balance" },
+      { id: "disbursements", label: "Fundraising", icon: "volunteer_activism" },
+      { id: "budget", label: "Budget", icon: "account_balance" },
       { id: "packages", label: "Package Distribution", icon: "inventory_2" },
     ],
   },

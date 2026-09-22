@@ -2,7 +2,7 @@
   <div class="flex w-full flex-col">
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6 md:p-8">
     <header
-      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'chapters' && activeTab !== 'payment-gateways' && activeTab !== 'integrations' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds' && activeTab !== 'organizations' && activeTab !== 'org-users' && activeTab !== 'audit' && activeTab !== 'mobile-device-log'"
+      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'budget' && activeTab !== 'payment-gateways' && activeTab !== 'integrations' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds' && activeTab !== 'organizations' && activeTab !== 'org-users' && activeTab !== 'audit' && activeTab !== 'mobile-device-log'"
       class="flex flex-col gap-4 pb-2 lg:flex-row lg:items-center lg:justify-between"
     >
       <div class="min-w-0 flex-1 flex flex-col gap-1.5">
@@ -707,8 +707,8 @@
       <AdminDisbursementsPanel @error="(msg: string) => (actionError = msg)" @message="(msg: string) => (message = msg)" />
     </section>
 
-    <section v-else-if="activeTab === 'chapters'" class="flex flex-col gap-6">
-      <AdminRegionalChaptersPanel
+    <section v-else-if="activeTab === 'budget'" class="flex flex-col gap-6">
+      <AdminBudgetPanel
         @error="(msg: string) => (actionError = msg)"
         @message="(msg: string) => (message = msg)"
       />
@@ -1138,7 +1138,7 @@ const ALL_TABS = [
   { id: "agents", label: "Agents" },
   { id: "sms-analytics", label: "SMS Analytics" },
   { id: "disbursements", label: "Disbursements" },
-  { id: "chapters", label: "Regional Chapters" },
+  { id: "budget", label: "Budget" },
   { id: "payment-gateways", label: "Payment Gateways" },
   { id: "integrations", label: "Integrations" },
   { id: "packages", label: "Packages" },
@@ -1607,8 +1607,8 @@ const pageTitle = computed(() => {
   if (activeTab.value === "field-agents") return "Field agent accounts & onboarding";
   if (activeTab.value === "recordings") return "Field Canvassing & Turf Command";
   if (activeTab.value === "sms-analytics") return "SMS Delivery & Response Analytics";
-  if (activeTab.value === "disbursements") return "Fundraising & Donor Capital Command";
-  if (activeTab.value === "chapters") return "Ogun Chapter Budget & Configuration";
+  if (activeTab.value === "disbursements") return "Fundraising";
+  if (activeTab.value === "budget") return "Budget";
   if (activeTab.value === "organizations") return "Organizations (SaaS)";
   if (activeTab.value === "org-users") return "Org Users & Roles";
   if (activeTab.value === "payment-gateways") return "Payment Gateway Configuration";

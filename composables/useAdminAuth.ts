@@ -23,7 +23,6 @@ export const STATE_ADMIN_NAV_TABS = [
   "sms-analytics",
   "votes",
   "disbursements",
-  "chapters",
   "packages",
   "inbox",
   "audit",
@@ -33,6 +32,7 @@ export const STATE_ADMIN_NAV_TABS = [
 
 export const SUPER_ADMIN_NAV_TABS = [
   ...STATE_ADMIN_NAV_TABS,
+  "budget",
   "payment-gateways",
   "integrations",
   "data",
@@ -51,6 +51,7 @@ export const ORG_ADMIN_NAV_TABS = [
   "sms-analytics",
   "votes",
   "disbursements",
+  "budget",
   "packages",
   "inbox",
   "audit",
