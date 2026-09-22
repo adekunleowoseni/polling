@@ -39,6 +39,7 @@ export const SUPER_ADMIN_NAV_TABS = [
   "airtime",
   "organizations",
   "mobile-device-log",
+  "telecom",
 ] as const;
 
 export const ORG_ADMIN_NAV_TABS = [
@@ -59,6 +60,7 @@ export const ORG_ADMIN_NAV_TABS = [
   "parties",
   "elective-offices",
   "org-users",
+  "telecom",
 ] as const;
 
 export const ORG_OPERATOR_NAV_TABS = [

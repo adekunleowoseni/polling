@@ -46,6 +46,8 @@ export type PackageKit = {
   form_title: string;
   stock_label: string;
   default_audience: string;
+  slug?: string | null;
+  is_default?: boolean;
   created_at: string;
 };
 

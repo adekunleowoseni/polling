@@ -2,7 +2,7 @@
   <div class="flex w-full flex-col">
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6 md:p-8">
     <header
-      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'budget' && activeTab !== 'payment-gateways' && activeTab !== 'integrations' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds' && activeTab !== 'organizations' && activeTab !== 'org-users' && activeTab !== 'audit' && activeTab !== 'mobile-device-log'"
+      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'budget' && activeTab !== 'payment-gateways' && activeTab !== 'integrations' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'telecom' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds' && activeTab !== 'organizations' && activeTab !== 'org-users' && activeTab !== 'audit' && activeTab !== 'mobile-device-log'"
       class="flex flex-col gap-4 pb-2 lg:flex-row lg:items-center lg:justify-between"
     >
       <div class="min-w-0 flex-1 flex flex-col gap-1.5">
@@ -750,6 +750,13 @@
       />
     </section>
 
+    <section v-else-if="activeTab === 'telecom'">
+      <AdminOrgTelecomPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
+    </section>
+
     <section v-else-if="activeTab === 'audit'">
       <IndependentAuditPanel :api-base="apiBase" embedded />
     </section>
@@ -1151,6 +1158,7 @@ const ALL_TABS = [
   { id: "votes", label: "Vote results" },
   { id: "data", label: "Data plans" },
   { id: "airtime", label: "Airtime" },
+  { id: "telecom", label: "Airtime & Data packs" },
 ] as const;
 
 type TabId = (typeof ALL_TABS)[number]["id"];
@@ -1619,6 +1627,7 @@ const pageTitle = computed(() => {
   if (activeTab.value === "votes") return "Vote Results Command";
   if (activeTab.value === "data") return "Agent Data Credit Command";
   if (activeTab.value === "airtime") return "Agent Airtime Command";
+  if (activeTab.value === "telecom") return "Org Airtime & Data Packs";
   return currentNavLabel.value;
 });
 

@@ -19,7 +19,6 @@ const exporting = ref(false);
 const busy = ref(false);
 const kitBusy = ref(false);
 const items = ref<PackageDistribution[]>([]);
-const customKits = ref<PackageKit[]>([]);
 const builderRef = ref<HTMLElement | null>(null);
 const builderHighlight = ref(false);
 const showAddKit = ref(false);
@@ -41,34 +40,11 @@ type BundleOption = {
   detail: string;
   formTitle: string;
   stockLabel: string;
-  custom?: boolean;
+  kitId: string;
 };
 
-const DEFAULT_BUNDLES: BundleOption[] = [
-  {
-    id: "leaflets",
-    title: "GOTV Direct Door Leaflet Pack",
-    detail: "High-gloss leaflets + walk clipboards + rain sleeves for ward drops",
-    formTitle: "GOTV door leaflet pack",
-    stockLabel: "Field ready",
-  },
-  {
-    id: "signs",
-    title: "High-Impact Yard Sign Bundle",
-    detail: "Weather-sealed coroplast signs + stakes for roadside and compound display",
-    formTitle: "Yard sign & stake bundle",
-    stockLabel: "Chapter stocked",
-  },
-  {
-    id: "relief",
-    title: "Relief / Material Claim Pack",
-    detail: "Ward relief packages for voter & member QR claim at agent stations",
-    formTitle: "Relief package distribution",
-    stockLabel: "Claim workflow",
-  },
-];
-
-const bundleId = ref("leaflets");
+const kits = ref<PackageKit[]>([]);
+const bundleId = ref("");
 const dispatchMode = ref<"express" | "hub" | "print">("hub");
 
 const kitForm = reactive({
@@ -79,20 +55,16 @@ const kitForm = reactive({
   default_audience: "both" as "voter" | "member" | "both",
 });
 
-/** Built-in archetypes the admin removed from this list (session). */
-const hiddenDefaultIds = ref<string[]>([]);
-
-const bundleOptions = computed<BundleOption[]>(() => [
-  ...DEFAULT_BUNDLES.filter((b) => !hiddenDefaultIds.value.includes(b.id)),
-  ...customKits.value.map((k) => ({
-    id: `custom:${k.id}`,
+const bundleOptions = computed<BundleOption[]>(() =>
+  kits.value.map((k) => ({
+    id: k.id,
     title: k.title,
-    detail: k.detail || "Custom collateral kit",
+    detail: k.detail || "Collateral kit",
     formTitle: k.form_title || k.title,
     stockLabel: k.stock_label || "Custom stock",
-    custom: true,
+    kitId: k.id,
   })),
-]);
+);
 
 function selectFallbackBundle(removedId: string) {
   if (bundleId.value !== removedId) return;
@@ -100,6 +72,8 @@ function selectFallbackBundle(removedId: string) {
   if (next) {
     bundleId.value = next.id;
     form.title = next.formTitle;
+  } else {
+    bundleId.value = "";
   }
 }
 
@@ -214,18 +188,27 @@ watch(bundleId, (id) => {
   const opt = bundleOptions.value.find((b) => b.id === id);
   if (opt) {
     form.title = opt.formTitle;
-    const custom = customKits.value.find((k) => `custom:${k.id}` === id);
-    if (custom?.default_audience === "voter" || custom?.default_audience === "member" || custom?.default_audience === "both") {
-      form.audience = custom.default_audience;
+    const kit = kits.value.find((k) => k.id === id);
+    if (kit?.default_audience === "voter" || kit?.default_audience === "member" || kit?.default_audience === "both") {
+      form.audience = kit.default_audience;
     }
   }
 });
 
 async function refreshKits() {
   try {
-    customKits.value = await loadKits();
+    kits.value = await loadKits();
+    if (!bundleId.value || !kits.value.some((k) => k.id === bundleId.value)) {
+      const first = kits.value[0];
+      if (first) {
+        bundleId.value = first.id;
+        form.title = first.form_title || first.title;
+      } else {
+        bundleId.value = "";
+      }
+    }
   } catch {
-    customKits.value = [];
+    kits.value = [];
   }
 }
 
@@ -459,7 +442,7 @@ async function saveKit() {
       default_audience: kitForm.default_audience,
     });
     await refreshKits();
-    bundleId.value = `custom:${created.id}`;
+    bundleId.value = created.id;
     form.title = created.form_title || created.title;
     if (created.default_audience === "voter" || created.default_audience === "member" || created.default_audience === "both") {
       form.audience = created.default_audience;
@@ -483,7 +466,7 @@ function kitErrorMessage(e: unknown, fallback: string) {
 }
 
 async function removeKit(kitId: string) {
-  const kit = customKits.value.find((k) => k.id === kitId);
+  const kit = kits.value.find((k) => k.id === kitId);
   const label = kit?.title ? `“${kit.title}”` : "this collateral kit";
   if (!confirm(`Delete ${label}? This cannot be undone.`)) return;
   deletingKitId.value = kitId;
@@ -491,9 +474,9 @@ async function removeKit(kitId: string) {
   try {
     await deleteKit(kitId);
     await refreshKits();
-    selectFallbackBundle(`custom:${kitId}`);
+    selectFallbackBundle(kitId);
     emit("message", `Collateral kit ${label} deleted.`);
-    if (!customKits.value.length) showManageKits.value = false;
+    if (!kits.value.length) showManageKits.value = false;
   } catch (e: unknown) {
     emit("error", kitErrorMessage(e, "Failed to delete collateral kit."));
   } finally {
@@ -503,16 +486,7 @@ async function removeKit(kitId: string) {
 }
 
 async function deleteBundle(b: BundleOption) {
-  if (b.custom) {
-    await removeKit(b.id.replace(/^custom:/, ""));
-    return;
-  }
-  if (!confirm(`Remove “${b.title}” from the kit list?`)) return;
-  deletingKitId.value = b.id;
-  hiddenDefaultIds.value = [...hiddenDefaultIds.value, b.id];
-  selectFallbackBundle(b.id);
-  emit("message", `“${b.title}” removed from the kit list.`);
-  deletingKitId.value = null;
+  await removeKit(b.kitId);
 }
 
 function openManageKits() {
@@ -885,7 +859,7 @@ onMounted(() => void refresh());
             <span class="font-label-caps text-xs font-bold text-primary">STEP 2: BUNDLE ARCHETYPE</span>
             <div class="flex items-center gap-1.5">
               <button
-                v-if="customKits.length"
+                v-if="kits.length"
                 type="button"
                 class="inline-flex h-8 items-center gap-1 rounded-lg bg-surface-container-lowest px-2.5 font-label-caps text-[10px] font-bold text-outline shadow-sm transition hover:bg-surface-container hover:text-error"
                 @click="openManageKits"
@@ -927,7 +901,7 @@ onMounted(() => void refresh());
                 type="button"
                 class="inline-flex h-9 shrink-0 items-center gap-1 self-center rounded-lg bg-error-container/50 px-2.5 font-label-caps text-[10px] font-bold text-error transition hover:bg-error hover:text-on-error disabled:opacity-50"
                 title="Delete kit"
-                :disabled="kitBusy || deletingKitId === b.id || deletingKitId === b.id.replace(/^custom:/, '')"
+                :disabled="kitBusy || deletingKitId === b.kitId"
                 @click="deleteBundle(b)"
               >
                 <span class="material-symbols-outlined text-[18px]">delete</span>
@@ -1301,23 +1275,23 @@ onMounted(() => void refresh());
           <header class="flex items-start justify-between gap-3 border-b border-outline-variant/30 px-5 py-4">
             <div>
               <h2 class="font-button-text text-lg font-bold text-primary">Manage collateral kits</h2>
-              <p class="mt-1 text-xs text-outline">Remove custom kits you no longer need. Built-in archetypes stay available.</p>
+              <p class="mt-1 text-xs text-outline">Delete removes a kit permanently from package distribution.</p>
             </div>
             <button type="button" class="rounded-lg p-1.5 text-outline hover:bg-surface-container" @click="showManageKits = false">
               <span class="material-symbols-outlined text-[20px]">close</span>
             </button>
           </header>
           <div class="max-h-[60vh] space-y-2 overflow-y-auto px-5 py-4">
-            <p v-if="!customKits.length" class="py-6 text-center text-sm text-outline">No custom kits yet.</p>
+            <p v-if="!kits.length" class="py-6 text-center text-sm text-outline">No kits yet.</p>
             <div
-              v-for="kit in customKits"
+              v-for="kit in kits"
               :key="kit.id"
               class="flex items-start justify-between gap-3 rounded-xl bg-off-white p-3"
             >
               <div class="min-w-0">
                 <p class="truncate font-button-text text-sm font-semibold text-primary">{{ kit.title }}</p>
                 <p class="mt-0.5 line-clamp-2 text-xs text-on-surface-variant">
-                  {{ kit.detail || "Custom collateral kit" }}
+                  {{ kit.detail || "Collateral kit" }}
                 </p>
               </div>
               <button
