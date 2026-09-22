@@ -21,10 +21,20 @@ export type IntegrationCredentials = {
   polygon_explorer_base: string | null;
   google_maps_configured: boolean;
   google_maps_api_key_masked: string | null;
+  social_login_enabled: boolean;
+  google_oauth_web_client_id: string | null;
+  google_oauth_ios_client_id: string | null;
+  google_oauth_android_client_id: string | null;
+  google_oauth_client_secret_configured: boolean;
+  google_oauth_client_secret_masked: string | null;
+  google_login_configured: boolean;
+  apple_oauth_client_id: string | null;
+  apple_oauth_service_id: string | null;
+  apple_login_configured: boolean;
   config_source: string;
 };
 
-type Section = "vtpass" | "livekit" | "ipfs" | "anchors" | "maps";
+type Section = "vtpass" | "livekit" | "ipfs" | "anchors" | "maps" | "social";
 
 const emit = defineEmits<{
   (e: "error", msg: string): void;
@@ -58,6 +68,15 @@ const polygonExplorer = ref("");
 
 const mapsApiKey = ref("");
 
+// Social sign-in (mobile Google / Apple login + signup)
+const socialLoginEnabled = ref(true);
+const googleWebClientId = ref("");
+const googleIosClientId = ref("");
+const googleAndroidClientId = ref("");
+const googleClientSecret = ref("");
+const appleClientId = ref("");
+const appleServiceId = ref("");
+
 onMounted(() => void refresh());
 
 async function refresh() {
@@ -78,6 +97,12 @@ async function refresh() {
     polygonChainId.value = creds.value.polygon_chain_id ?? 80002;
     polygonContract.value = creds.value.polygon_contract_address ?? "";
     polygonExplorer.value = creds.value.polygon_explorer_base ?? "";
+    socialLoginEnabled.value = creds.value.social_login_enabled ?? true;
+    googleWebClientId.value = creds.value.google_oauth_web_client_id ?? "";
+    googleIosClientId.value = creds.value.google_oauth_ios_client_id ?? "";
+    googleAndroidClientId.value = creds.value.google_oauth_android_client_id ?? "";
+    appleClientId.value = creds.value.apple_oauth_client_id ?? "";
+    appleServiceId.value = creds.value.apple_oauth_service_id ?? "";
   } catch (e: unknown) {
     emit("error", e instanceof Error ? e.message : "Failed to load integration credentials.");
   } finally {
@@ -118,6 +143,19 @@ function patchFor(section: Section): Record<string, string | boolean | number> {
     if (polygonExplorer.value.trim()) patch.polygon_explorer_base = polygonExplorer.value.trim();
     return patch;
   }
+  if (section === "social") {
+    // Client IDs are public identifiers: send them even when cleared so admins can unset a platform.
+    const patch: Record<string, string | boolean> = {
+      social_login_enabled: socialLoginEnabled.value,
+      google_oauth_web_client_id: googleWebClientId.value.trim(),
+      google_oauth_ios_client_id: googleIosClientId.value.trim(),
+      google_oauth_android_client_id: googleAndroidClientId.value.trim(),
+      apple_oauth_client_id: appleClientId.value.trim(),
+      apple_oauth_service_id: appleServiceId.value.trim(),
+    };
+    if (googleClientSecret.value.trim()) patch.google_oauth_client_secret = googleClientSecret.value.trim();
+    return patch;
+  }
   const patch: Record<string, string> = {};
   if (mapsApiKey.value.trim()) patch.google_maps_api_key = mapsApiKey.value.trim();
   return patch;
@@ -137,6 +175,8 @@ function clearSecrets(section: Section) {
     polygonPrivateKey.value = "";
   } else if (section === "maps") {
     mapsApiKey.value = "";
+  } else if (section === "social") {
+    googleClientSecret.value = "";
   }
 }
 
@@ -146,6 +186,7 @@ const sectionLabels: Record<Section, string> = {
   ipfs: "IPFS / Pinata",
   anchors: "Public-chain anchors",
   maps: "Google Maps",
+  social: "Social sign-in",
 };
 
 async function saveSection(section: Section) {
@@ -252,6 +293,18 @@ function statusLabel(ok: boolean | undefined) {
             {{ statusLabel(creds?.google_maps_configured) }}
           </p>
           <p class="mt-1 text-[11px] text-outline">Source: {{ creds?.config_source || "—" }}</p>
+        </div>
+        <div class="rounded-2xl bg-surface-container-lowest p-4 shadow-sm">
+          <p class="font-label-caps text-[10px] uppercase text-outline">Google sign-in</p>
+          <p class="mt-1 text-sm font-bold" :class="statusClass(creds?.google_login_configured)">
+            {{ statusLabel(creds?.google_login_configured) }}
+          </p>
+        </div>
+        <div class="rounded-2xl bg-surface-container-lowest p-4 shadow-sm">
+          <p class="font-label-caps text-[10px] uppercase text-outline">Apple sign-in</p>
+          <p class="mt-1 text-sm font-bold" :class="statusClass(creds?.apple_login_configured)">
+            {{ statusLabel(creds?.apple_login_configured) }}
+          </p>
         </div>
       </div>
 
@@ -430,6 +483,93 @@ function statusLabel(ok: boolean | undefined) {
               @click="saveSection('maps')"
             >
               {{ savingSection === "maps" ? "Saving…" : "Save Maps key" }}
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-3 rounded-2xl bg-surface-container-lowest p-6 shadow-sm lg:col-span-2">
+          <h2 class="font-headline-md text-lg font-bold text-primary">Google &amp; Apple sign-in</h2>
+          <p class="text-xs text-outline">
+            Controls "Continue with Google / Apple" on mobile login and signup. Client IDs are public
+            identifiers published through <code class="text-secondary">GET /public/client-config</code>; tokens are
+            verified server-side against these IDs.
+          </p>
+
+          <label class="flex items-center gap-2 text-sm text-on-surface">
+            <input v-model="socialLoginEnabled" type="checkbox" class="h-4 w-4 accent-electric-pink" />
+            Enable social sign-in for all apps
+          </label>
+
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="space-y-1">
+              <p class="font-label-caps text-[10px] uppercase text-outline">Google web client ID</p>
+              <input
+                v-model="googleWebClientId"
+                type="text"
+                placeholder="xxxx.apps.googleusercontent.com"
+                class="w-full rounded-xl bg-off-white px-3 py-2.5 text-sm text-on-surface outline-none"
+              />
+            </div>
+            <div class="space-y-1">
+              <p class="font-label-caps text-[10px] uppercase text-outline">Google iOS client ID</p>
+              <input
+                v-model="googleIosClientId"
+                type="text"
+                placeholder="xxxx.apps.googleusercontent.com"
+                class="w-full rounded-xl bg-off-white px-3 py-2.5 text-sm text-on-surface outline-none"
+              />
+            </div>
+            <div class="space-y-1">
+              <p class="font-label-caps text-[10px] uppercase text-outline">Google Android client ID</p>
+              <input
+                v-model="googleAndroidClientId"
+                type="text"
+                placeholder="xxxx.apps.googleusercontent.com"
+                class="w-full rounded-xl bg-off-white px-3 py-2.5 text-sm text-on-surface outline-none"
+              />
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-3">
+            <div class="space-y-1">
+              <p class="font-label-caps text-[10px] uppercase text-outline">
+                Google client secret ({{ creds?.google_oauth_client_secret_masked || "not set" }})
+              </p>
+              <input
+                v-model="googleClientSecret"
+                type="password"
+                placeholder="Only needed for web code exchange"
+                class="w-full rounded-xl bg-off-white px-3 py-2.5 text-sm text-on-surface outline-none"
+              />
+            </div>
+            <div class="space-y-1">
+              <p class="font-label-caps text-[10px] uppercase text-outline">Apple bundle ID (native)</p>
+              <input
+                v-model="appleClientId"
+                type="text"
+                placeholder="com.emobilize.app"
+                class="w-full rounded-xl bg-off-white px-3 py-2.5 text-sm text-on-surface outline-none"
+              />
+            </div>
+            <div class="space-y-1">
+              <p class="font-label-caps text-[10px] uppercase text-outline">Apple services ID (web)</p>
+              <input
+                v-model="appleServiceId"
+                type="text"
+                placeholder="com.emobilize.web"
+                class="w-full rounded-xl bg-off-white px-3 py-2.5 text-sm text-on-surface outline-none"
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button
+              type="button"
+              class="rounded-xl bg-electric-pink px-4 py-2 text-sm font-semibold text-pure-white disabled:opacity-50"
+              :disabled="savingSection === 'social'"
+              @click="saveSection('social')"
+            >
+              {{ savingSection === "social" ? "Saving…" : "Save sign-in settings" }}
             </button>
           </div>
         </div>
