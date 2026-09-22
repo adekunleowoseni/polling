@@ -69,9 +69,11 @@ const playingUrl = ref<string | null>(null);
 const playingTitle = ref("");
 const showRebalance = ref(false);
 const showCutTurf = ref(false);
+const showPublishCanvass = ref(false);
 const rebalanceBusy = ref(false);
 const cutBusy = ref(false);
 const walksheetBusy = ref(false);
+const publishBusy = ref(false);
 const mapCanvasEl = ref<HTMLElement | null>(null);
 const turfPolygon = ref<{ lat: number; lng: number }[]>([]);
 const rebalanceMoves = ref<
@@ -82,6 +84,19 @@ const cutForm = reactive({
   ward: "",
   agentIds: [] as string[],
 });
+const canvassForm = reactive({
+  title: "",
+  description: "",
+  meeting_point: "",
+  lga: "",
+  ward: "",
+  agentIds: [] as string[],
+});
+const recentCanvassActions = ref<
+  { id: string; title: string; agent_name: string; status: string; ward: string | null; lga: string | null; created_at: string }[]
+>([]);
+
+const { assignCanvassActions, listCanvassActions, crmError } = useAdminCrm();
 
 onMounted(() => void refresh());
 onUnmounted(() => closePlayer());
@@ -110,6 +125,11 @@ async function refresh(opts: { map?: { lga?: string; ward?: string } } = {}) {
       ...(topLga ? { lga: topLga } : {}),
       ...(opts.map?.ward ? { ward: opts.map.ward } : {}),
     });
+    try {
+      recentCanvassActions.value = (await listCanvassActions()).slice(0, 8);
+    } catch {
+      recentCanvassActions.value = [];
+    }
   } catch {
     emit("error", "Failed to load field canvassing command.");
   } finally {
@@ -650,6 +670,75 @@ async function confirmCutTurf() {
   }
 }
 
+async function openPublishCanvass() {
+  await loadLgas();
+  showPublishCanvass.value = true;
+  canvassForm.agentIds = [];
+  canvassForm.title = "";
+  canvassForm.description = "";
+  canvassForm.meeting_point = "";
+  const top = lgaSectors.value[0];
+  if (top) {
+    canvassForm.lga = top.lga;
+    await loadWards(canvassForm.lga);
+    canvassForm.ward = top.ward || wards.value[0] || "";
+  } else if (lgas.value[0]) {
+    canvassForm.lga = lgas.value[0];
+    await loadWards(canvassForm.lga);
+    canvassForm.ward = wards.value[0] || "";
+  }
+  canvassForm.title = canvassForm.ward
+    ? `Door-to-door — ${canvassForm.ward}`
+    : "Door-to-door canvassing";
+}
+
+async function onCanvassLgaChange() {
+  canvassForm.ward = "";
+  await loadWards(canvassForm.lga);
+  canvassForm.ward = wards.value[0] || "";
+  if (canvassForm.ward) canvassForm.title = `Door-to-door — ${canvassForm.ward}`;
+}
+
+function toggleCanvassAgent(id: string) {
+  const idx = canvassForm.agentIds.indexOf(id);
+  if (idx >= 0) canvassForm.agentIds.splice(idx, 1);
+  else canvassForm.agentIds.push(id);
+}
+
+async function submitPublishCanvass() {
+  if (!canvassForm.title.trim()) {
+    emit("error", "Enter an action title.");
+    return;
+  }
+  if (!canvassForm.agentIds.length) {
+    emit("error", "Select at least one field agent to assign.");
+    return;
+  }
+  publishBusy.value = true;
+  try {
+    const res = await assignCanvassActions({
+      title: canvassForm.title.trim(),
+      description: canvassForm.description.trim() || null,
+      meeting_point: canvassForm.meeting_point.trim() || null,
+      lga: canvassForm.lga || null,
+      ward: canvassForm.ward || null,
+      agent_ids: [...canvassForm.agentIds],
+    });
+    showPublishCanvass.value = false;
+    recentCanvassActions.value = (await listCanvassActions()).slice(0, 8);
+    emit(
+      "message",
+      `Published canvassing action to ${res.created} agent${res.created === 1 ? "" : "s"}${
+        res.skipped ? ` (${res.skipped} skipped)` : ""
+      }.`,
+    );
+  } catch (e) {
+    emit("error", crmError(e, "Failed to publish canvassing action."));
+  } finally {
+    publishBusy.value = false;
+  }
+}
+
 async function downloadWalksheets() {
   walksheetBusy.value = true;
   try {
@@ -852,7 +941,15 @@ async function deleteRecording(id: string) {
             Real-time spatial deployment, door-to-door turf cutting, GPS walk route optimization, and live sync across mobile field terminals.
           </p>
         </div>
-        <div class="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 xl:w-auto xl:shrink-0">
+        <div class="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto xl:shrink-0 xl:grid-cols-4">
+          <button
+            type="button"
+            class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-deep-navy px-4 font-button-text text-sm font-semibold text-pure-white shadow-sm transition hover:opacity-95"
+            @click="openPublishCanvass"
+          >
+            <span class="material-symbols-outlined shrink-0 text-[18px] text-action-green">campaign</span>
+            <span class="truncate">Publish Canvass Action</span>
+          </button>
           <button
             type="button"
             class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-deep-navy shadow-sm transition hover:bg-surface-container-low disabled:opacity-60 dark:text-pure-white"
@@ -1499,6 +1596,137 @@ async function deleteRecording(id: string) {
               @click="confirmCutTurf"
             >
               {{ cutBusy ? "Cutting…" : "Cut turf & assign" }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Publish canvass action modal -->
+    <Teleport to="body">
+      <div
+        v-if="showPublishCanvass"
+        class="fixed inset-0 z-[80] flex items-end justify-center bg-deep-navy/50 p-4 sm:items-center"
+        @click.self="showPublishCanvass = false"
+      >
+        <div class="max-h-[90vh] w-full max-w-xl overflow-hidden rounded-2xl bg-surface-container-lowest shadow-xl">
+          <header class="flex items-start justify-between gap-3 border-b border-outline-variant/30 px-5 py-4">
+            <div>
+              <p class="font-label-caps text-label-caps uppercase tracking-wider text-action-green">Action Hub</p>
+              <h3 class="font-headline-md text-lg font-bold text-deep-navy">Publish canvassing action</h3>
+              <p class="mt-1 text-sm text-on-surface-variant">
+                Assign a door-to-door action to field agents. They can join, start, and log knocks in the mobile app.
+              </p>
+            </div>
+            <button type="button" class="rounded-lg p-1.5 text-outline hover:bg-surface-container" @click="showPublishCanvass = false">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </header>
+          <div class="max-h-[60vh] space-y-4 overflow-y-auto px-5 py-4">
+            <label class="block text-sm font-medium text-primary">
+              Title
+              <input
+                v-model.trim="canvassForm.title"
+                type="text"
+                maxlength="120"
+                class="mt-1.5 w-full rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30"
+                placeholder="Door-to-door — Ward name"
+              />
+            </label>
+            <label class="block text-sm font-medium text-primary">
+              Description
+              <textarea
+                v-model.trim="canvassForm.description"
+                rows="2"
+                maxlength="500"
+                class="mt-1.5 w-full rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30"
+                placeholder="Talking points, targets, or shift notes"
+              />
+            </label>
+            <label class="block text-sm font-medium text-primary">
+              Meeting point
+              <input
+                v-model.trim="canvassForm.meeting_point"
+                type="text"
+                maxlength="200"
+                class="mt-1.5 w-full rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30"
+                placeholder="Ward secretariat gate"
+              />
+            </label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="block text-sm font-medium text-primary">
+                LGA
+                <select
+                  v-model="canvassForm.lga"
+                  class="mt-1.5 w-full rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30"
+                  @change="onCanvassLgaChange"
+                >
+                  <option value="" disabled>Select LGA</option>
+                  <option v-for="lga in lgas" :key="lga" :value="lga">{{ lga }}</option>
+                </select>
+              </label>
+              <label class="block text-sm font-medium text-primary">
+                Ward
+                <select
+                  v-model="canvassForm.ward"
+                  class="mt-1.5 w-full rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30"
+                  :disabled="!canvassForm.lga"
+                >
+                  <option value="" disabled>Select ward</option>
+                  <option v-for="ward in wards" :key="ward" :value="ward">{{ ward }}</option>
+                </select>
+              </label>
+            </div>
+            <div>
+              <p class="mb-2 text-sm font-medium text-primary">
+                Field agents ({{ canvassForm.agentIds.length }} selected)
+              </p>
+              <ul class="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-outline-variant/40 bg-off-white p-2">
+                <li v-for="agent in scopedAgents" :key="agent.id">
+                  <label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-surface-container-low">
+                    <input
+                      type="checkbox"
+                      class="rounded border-outline-variant"
+                      :checked="canvassForm.agentIds.includes(agent.id)"
+                      @change="toggleCanvassAgent(agent.id)"
+                    />
+                    <span class="min-w-0 flex-1 truncate font-medium text-on-surface">{{ agent.name }}</span>
+                    <span class="shrink-0 font-label-caps text-[10px] text-outline">
+                      {{ agent.ward || agent.lga || "Unassigned" }}
+                    </span>
+                  </label>
+                </li>
+              </ul>
+            </div>
+            <div v-if="recentCanvassActions.length" class="rounded-xl border border-outline-variant/30 bg-surface-container-low/40 p-3">
+              <p class="mb-2 font-label-caps text-label-caps uppercase tracking-wider text-outline">Recently published</p>
+              <ul class="space-y-1.5">
+                <li
+                  v-for="row in recentCanvassActions"
+                  :key="row.id"
+                  class="flex items-center justify-between gap-2 text-xs text-on-surface"
+                >
+                  <span class="truncate font-medium">{{ row.title }} · {{ row.agent_name }}</span>
+                  <span class="shrink-0 font-mono uppercase text-outline">{{ row.status }}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <footer class="flex flex-wrap justify-end gap-2 border-t border-outline-variant/30 px-5 py-4">
+            <button
+              type="button"
+              class="inline-flex h-10 items-center justify-center rounded-xl bg-surface-container px-4 font-button-text text-sm font-semibold text-on-surface"
+              @click="showPublishCanvass = false"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-deep-navy px-4 font-button-text text-sm font-semibold text-pure-white disabled:opacity-60"
+              :disabled="publishBusy || !canvassForm.title.trim() || !canvassForm.agentIds.length"
+              @click="submitPublishCanvass"
+            >
+              {{ publishBusy ? "Publishing…" : "Publish to agents" }}
             </button>
           </footer>
         </div>

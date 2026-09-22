@@ -1,9 +1,38 @@
-/** Google Maps JavaScript API — same key family as mobile EXPO_PUBLIC_GOOGLE_MAPS_API_KEY */
+/** Google Maps JavaScript API — prefer key from backend `/public/client-config`. */
+
+type ClientConfig = {
+  google_maps_api_key: string;
+  google_maps_configured: boolean;
+};
+
+const mapsKeyState = () =>
+  useState<string>("googleMapsApiKeyFromBackend", () => "");
+
 export function useGoogleMapsKey() {
   const config = useRuntimeConfig();
-  const key = computed(() => String(config.public.googleMapsApiKey || "").trim());
+  const remoteKey = mapsKeyState();
+  const key = computed(() => {
+    const fromBackend = String(remoteKey.value || "").trim();
+    if (fromBackend.length > 10) return fromBackend;
+    return String(config.public.googleMapsApiKey || "").trim();
+  });
   const hasKey = computed(() => key.value.length > 10);
-  return { key, hasKey };
+
+  async function ensureMapsKey() {
+    if (import.meta.server) return key.value;
+    if (remoteKey.value.length > 10) return remoteKey.value;
+    try {
+      const apiBase = String(config.public.apiBase || "").replace(/\/$/, "");
+      const data = await $fetch<ClientConfig>(`${apiBase}/public/client-config`);
+      const fetched = String(data?.google_maps_api_key || "").trim();
+      if (fetched.length > 10) remoteKey.value = fetched;
+    } catch {
+      /* fall back to NUXT_PUBLIC_GOOGLE_MAPS_API_KEY */
+    }
+    return key.value;
+  }
+
+  return { key, hasKey, ensureMapsKey };
 }
 
 let mapsLoadPromise: Promise<void> | null = null;

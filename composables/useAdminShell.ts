@@ -25,6 +25,7 @@ export const ADMIN_NAV_GROUPS = [
     label: "Supporter CRM",
     items: [
       { id: "agents", label: "Voter Directory", icon: "groups" },
+      { id: "field-agents", label: "Field Agents", icon: "badge" },
       { id: "sms-analytics", label: "SMS Delivery Analytics", icon: "cell_tower" },
       { id: "inbox", label: "Inbox", icon: "inbox" },
     ],
@@ -36,6 +37,7 @@ export const ADMIN_NAV_GROUPS = [
       { id: "recordings", label: "Field Canvassing", icon: "how_to_reg" },
       { id: "votes", label: "Vote Results", icon: "how_to_vote" },
       { id: "parties", label: "Parties & Candidates", icon: "flag" },
+      { id: "elective-offices", label: "Elective Offices", icon: "account_balance" },
     ],
   },
   {
@@ -55,6 +57,7 @@ export const ADMIN_NAV_GROUPS = [
       { id: "organizations", label: "Organizations (SaaS)", icon: "apartment" },
       { id: "org-users", label: "Org Users & Roles", icon: "manage_accounts" },
       { id: "payment-gateways", label: "Payment Gateways", icon: "payments" },
+      { id: "integrations", label: "Integrations", icon: "vpn_key" },
       { id: "data", label: "Data Plans", icon: "sim_card" },
       { id: "airtime", label: "Airtime", icon: "phone_iphone" },
     ],

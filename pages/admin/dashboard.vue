@@ -2,7 +2,7 @@
   <div class="flex w-full flex-col">
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6 md:p-8">
     <header
-      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'chapters' && activeTab !== 'payment-gateways' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds' && activeTab !== 'organizations' && activeTab !== 'org-users' && activeTab !== 'audit'"
+      v-if="activeTab !== 'agents' && activeTab !== 'sms-analytics' && activeTab !== 'disbursements' && activeTab !== 'recordings' && activeTab !== 'chapters' && activeTab !== 'payment-gateways' && activeTab !== 'integrations' && activeTab !== 'packages' && activeTab !== 'parties' && activeTab !== 'votes' && activeTab !== 'data' && activeTab !== 'airtime' && activeTab !== 'snaps' && activeTab !== 'inbox' && activeTab !== 'feeds' && activeTab !== 'organizations' && activeTab !== 'org-users' && activeTab !== 'audit'"
       class="flex flex-col gap-4 pb-2 lg:flex-row lg:items-center lg:justify-between"
     >
       <div class="min-w-0 flex-1 flex flex-col gap-1.5">
@@ -19,6 +19,7 @@
           >
             <span class="h-2 w-2 animate-ping rounded-full bg-action-green" />
             <span class="font-label-caps text-[11px] font-semibold text-on-surface">
+              <template v-if="selectedOrg">{{ selectedOrg.name }} · </template>
               Live sync: {{ commandLive }} feeds · {{ Number(commandPeople || 0).toLocaleString() }} people
             </span>
           </div>
@@ -471,10 +472,116 @@
     <section v-else-if="activeTab === 'agents'" class="flex flex-col gap-6">
       <AdminCrmDirectory
         :state-scope="'Ogun State'"
+        audience="voters"
         @error="(msg: string) => (actionError = msg)"
         @message="(msg: string) => (message = msg)"
         @open-agent="openAgentModal"
       />
+    </section>
+
+    <section v-else-if="activeTab === 'field-agents'" class="flex flex-col gap-6">
+      <section
+        v-if="canOnboardAgents"
+        class="overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm"
+      >
+        <div class="border-b border-outline-variant/30 bg-deep-navy p-5 text-pure-white">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p class="font-label-caps text-label-caps uppercase tracking-wider text-action-green">Agent onboarding</p>
+              <h2 class="mt-1 text-xl font-bold">Onboard a field agent</h2>
+              <p class="mt-1 max-w-2xl text-sm text-on-navy">
+                Create accounts with ranks: LGA Coordinator, Ward Coordinator, polling unit agent, or field agent.
+              </p>
+            </div>
+            <span class="material-symbols-outlined text-3xl text-electric-pink">person_add</span>
+          </div>
+        </div>
+        <form class="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3" @submit.prevent="onboardAgent">
+          <label class="flex flex-col gap-1.5 text-sm font-medium text-primary">
+            Full name
+            <input v-model.trim="onboardingForm.name" required minlength="2" maxlength="80" type="text" placeholder="Agent name" class="rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30" />
+          </label>
+          <label class="flex flex-col gap-1.5 text-sm font-medium text-primary">
+            Email
+            <input v-model.trim="onboardingForm.email" required type="email" placeholder="agent@example.com" class="rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30" />
+          </label>
+          <label class="flex flex-col gap-1.5 text-sm font-medium text-primary">
+            Temporary password
+            <input v-model="onboardingForm.password" required minlength="8" maxlength="128" type="password" placeholder="At least 8 characters" class="rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30" />
+          </label>
+          <label class="flex flex-col gap-1.5 text-sm font-medium text-primary">
+            Rank
+            <select v-model="onboardingForm.rank" required class="rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30">
+              <option value="lga_supervisor">LGA Coordinator</option>
+              <option value="ward_supervisor">Ward Coordinator</option>
+              <option value="polling_unit_agent">Polling unit agent</option>
+              <option value="field_agent">Field agent</option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1.5 text-sm font-medium text-primary">
+            LGA
+            <select v-model="onboardingForm.lga" required class="rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30" @change="onOnboardingLgaChange">
+              <option value="" disabled>Select LGA</option>
+              <option v-for="lga in lgas" :key="lga" :value="lga">{{ lga }}</option>
+            </select>
+          </label>
+          <label v-if="onboardingForm.rank !== 'lga_supervisor'" class="flex flex-col gap-1.5 text-sm font-medium text-primary">
+            Ward
+            <select v-model="onboardingForm.ward" required :disabled="!onboardingForm.lga || loadingOnboardingWards" class="rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30 disabled:cursor-not-allowed disabled:opacity-60">
+              <option value="" disabled>{{ loadingOnboardingWards ? "Loading wards…" : "Select ward" }}</option>
+              <option v-for="ward in onboardingWards" :key="ward" :value="ward">{{ ward }}</option>
+            </select>
+          </label>
+          <label v-if="onboardingForm.rank === 'polling_unit_agent'" class="flex flex-col gap-1.5 text-sm font-medium text-primary">
+            Polling unit code (optional)
+            <input v-model.trim="onboardingForm.polling_unit_code" type="text" placeholder="e.g. 27-01-01-001" class="rounded-lg bg-off-white px-3 py-2.5 text-on-surface focus:outline-none focus:ring-2 focus:ring-electric-pink/30" />
+          </label>
+          <div class="flex flex-wrap items-center gap-3 md:col-span-2 xl:col-span-3">
+            <button type="submit" :disabled="onboardingBusy" class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-electric-pink px-4 text-sm font-semibold text-pure-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60">
+              <span class="material-symbols-outlined text-[18px]">person_add</span>
+              {{ onboardingBusy ? "Creating account…" : "Create agent account" }}
+            </button>
+            <p v-if="onboardingError" class="text-sm text-error">{{ onboardingError }}</p>
+          </div>
+        </form>
+      </section>
+
+      <section
+        v-if="canOnboardAgents"
+        class="overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm"
+      >
+        <div class="border-b border-outline-variant/30 px-5 py-4">
+          <h2 class="font-semibold text-primary">Bulk import agents</h2>
+          <p class="text-xs text-outline">
+            Upload CSV/Excel with columns: Name, Email, LGA, Ward, Rank, Password (optional), Polling unit (optional).
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 p-5">
+          <input
+            ref="agentImportInput"
+            type="file"
+            accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            class="text-sm"
+            @change="onAgentImportSelected"
+          />
+          <button
+            type="button"
+            class="rounded-lg border border-outline-variant/40 px-4 py-2 text-sm font-semibold text-primary hover:bg-surface-container"
+            @click="downloadAgentImportSample"
+          >
+            Download sample CSV
+          </button>
+          <button
+            type="button"
+            class="rounded-lg bg-deep-navy px-4 py-2 text-sm font-semibold text-pure-white disabled:opacity-50"
+            :disabled="agentImportBusy || !agentImportFile"
+            @click="importAgentsBulk"
+          >
+            {{ agentImportBusy ? "Importing…" : "Import file" }}
+          </button>
+          <p v-if="agentImportMessage" class="text-sm text-on-surface-variant">{{ agentImportMessage }}</p>
+        </div>
+      </section>
 
       <div v-if="admin?.role === 'super_admin' && pendingAccreditations.length" class="overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
         <div class="border-b border-outline-variant/40 bg-secondary-fixed/20 p-5">
@@ -557,6 +664,9 @@
           >
             <p class="truncate font-medium text-primary">{{ agent.name }}</p>
             <p class="truncate text-xs text-outline">{{ agent.email }}</p>
+            <p class="mt-1 text-[11px] font-semibold text-electric-pink">
+              {{ agent.rank_label || rankLabel(agent.rank) }}
+            </p>
             <p v-if="agent.state || agent.lga" class="mt-2 truncate text-xs text-action-green">
               <span v-if="agent.state" class="font-semibold">{{ agent.state }}</span>
               <span v-if="agent.state && agent.lga"> · </span>
@@ -611,6 +721,13 @@
       />
     </section>
 
+    <section v-else-if="activeTab === 'integrations'" class="flex flex-col gap-6">
+      <AdminIntegrationsPanel
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
+    </section>
+
     <section v-else-if="activeTab === 'packages'">
       <AdminPackagesPanel @error="(msg: string) => (actionError = msg)" @message="(msg: string) => (message = msg)" />
     </section>
@@ -653,6 +770,16 @@
 
     <section v-else-if="activeTab === 'parties'">
       <AdminPartiesPanel
+        :jurisdiction="selectedOrg?.jurisdiction || 'ng-inec'"
+        @error="(msg: string) => (actionError = msg)"
+        @message="(msg: string) => (message = msg)"
+      />
+    </section>
+
+    <section v-else-if="activeTab === 'elective-offices'" class="flex flex-col gap-6">
+      <AdminElectivePositionsPanel
+        :jurisdiction="selectedOrg?.jurisdiction || 'ng-inec'"
+        :political="!selectedOrg || selectedOrg.archetype === 'political' || selectedOrg.archetype === 'campaign'"
         @error="(msg: string) => (actionError = msg)"
         @message="(msg: string) => (message = msg)"
       />
@@ -906,9 +1033,12 @@ type AdminAgentSummary = {
   id: string;
   name: string;
   email: string;
+  rank?: string;
+  rank_label?: string;
   lga: string | null;
   ward: string | null;
   state?: string | null;
+  polling_unit_code?: string | null;
   created_at: string;
   polling_unit_count: number;
   live_unit_count: number;
@@ -989,7 +1119,8 @@ definePageMeta({ layout: "admin" });
 const router = useRouter();
 const { admin, authHeaders, requireAdmin, clear, apiBase, refreshMe, canAccessTab } =
   useAdminAuth();
-const { lgas, loadLgas } = useOgunGeo();
+const { selectedOrgId, selectedOrg, orgQuery, loadOrganizations } = useAdminOrgContext();
+const { lgas, wards: onboardingWards, loadingWards: loadingOnboardingWards, loadLgas, loadWards } = useOgunGeo();
 const { activeTab, searchQuery, setTab } = useAdminShell();
 
 const ALL_TABS = [
@@ -1002,6 +1133,7 @@ const ALL_TABS = [
   { id: "disbursements", label: "Disbursements" },
   { id: "chapters", label: "Regional Chapters" },
   { id: "payment-gateways", label: "Payment Gateways" },
+  { id: "integrations", label: "Integrations" },
   { id: "packages", label: "Packages" },
   { id: "inbox", label: "Inbox" },
   { id: "audit", label: "Independent Audit" },
@@ -1035,6 +1167,40 @@ const playingRecordingTitle = ref("");
 const loadingUnits = ref(false);
 const loadingSnaps = ref(false);
 const loadingAgents = ref(false);
+const onboardingBusy = ref(false);
+const onboardingError = ref("");
+const onboardingForm = reactive({
+  name: "",
+  email: "",
+  password: "",
+  rank: "field_agent",
+  lga: "",
+  ward: "",
+  polling_unit_code: "",
+});
+const agentImportInput = ref<HTMLInputElement | null>(null);
+const agentImportFile = ref<File | null>(null);
+const agentImportBusy = ref(false);
+const agentImportMessage = ref("");
+
+const canOnboardAgents = computed(() => {
+  const role = admin.value?.role || "";
+  return (
+    role === "super_admin" ||
+    role === "org_owner" ||
+    role === "org_admin" ||
+    role === "director_general" ||
+    role === "campaign_manager" ||
+    role === "state_admin"
+  );
+});
+
+function rankLabel(rank?: string | null) {
+  if (rank === "lga_supervisor") return "LGA Coordinator";
+  if (rank === "ward_supervisor") return "Ward Coordinator";
+  if (rank === "polling_unit_agent") return "Polling unit agent";
+  return "Field agent";
+}
 
 type PendingAccreditation = {
   agent_id: string;
@@ -1415,6 +1581,7 @@ const overviewStats = computed(() => {
     },
     { label: "Saved pictures", value: pictures, hint: scoped ? stateScopeFilter.value : null, clickable: false },
     { label: "Agents", value: agentCount, hint: scoped ? stateScopeFilter.value : null, clickable: false },
+    { label: "Directory voters", value: overview.value?.directory_voters ?? "—", hint: selectedOrg.value?.name || null, clickable: false },
     { label: "Forms scanned", value: overview.value?.form_registrations ?? "—", hint: null, clickable: false },
   ];
 });
@@ -1423,8 +1590,13 @@ const currentNavLabel = computed(
   () => ADMIN_NAV.find((item) => item.id === activeTab.value)?.label ?? "Overview",
 );
 const pageTitle = computed(() => {
-  if (activeTab.value === "overview") return "Global mission operations";
-  if (activeTab.value === "agents") return "Supporter & Voter Directory";
+  if (activeTab.value === "overview") {
+    return selectedOrg.value?.name
+      ? `${selectedOrg.value.name} operations`
+      : "Global mission operations";
+  }
+  if (activeTab.value === "agents") return "Voter & supporter directory";
+  if (activeTab.value === "field-agents") return "Field agent accounts & onboarding";
   if (activeTab.value === "recordings") return "Field Canvassing & Turf Command";
   if (activeTab.value === "sms-analytics") return "SMS Delivery & Response Analytics";
   if (activeTab.value === "disbursements") return "Fundraising & Donor Capital Command";
@@ -1432,6 +1604,7 @@ const pageTitle = computed(() => {
   if (activeTab.value === "organizations") return "Organizations (SaaS)";
   if (activeTab.value === "org-users") return "Org Users & Roles";
   if (activeTab.value === "payment-gateways") return "Payment Gateway Configuration";
+  if (activeTab.value === "integrations") return "Integration Credentials";
   if (activeTab.value === "packages") return "Package Distribution Command";
   if (activeTab.value === "parties") return "Party & Candidate Registry";
   if (activeTab.value === "votes") return "Vote Results Command";
@@ -1547,7 +1720,7 @@ const criticalAlerts = computed(() => {
       body: `${row.agent_name} · ${row.ward || "—"}, ${row.lga || "—"}`,
       meta: "Pending",
       tone: "text-secondary",
-      action: () => setTab("agents"),
+      action: () => setTab("field-agents"),
       actionLabel: "Review",
     });
   }
@@ -1602,6 +1775,9 @@ watch(searchQuery, (query) => {
 onMounted(async () => {
   if (!requireAdmin()) return;
   await refreshMe();
+  if (admin.value?.role === "super_admin") {
+    await loadOrganizations();
+  }
   if (!canAccessTab(activeTab.value) && visibleTabs.value.length) {
     activeTab.value = visibleTabs.value[0].id;
   }
@@ -1619,6 +1795,11 @@ onMounted(async () => {
     loadPendingAccreditations();
   }
   void refreshOverviewMap();
+});
+
+watch(selectedOrgId, () => {
+  void loadOverview();
+  void loadAgents();
 });
 
 watch([activeTab, stateScopeFilter], () => {
@@ -1658,7 +1839,10 @@ function logout() {
 
 async function loadOverview() {
   try {
-    overview.value = await $fetch<AdminOverview>(`${apiBase}/admin/overview`, { headers: authHeaders() });
+    overview.value = await $fetch<AdminOverview>(`${apiBase}/admin/overview`, {
+      headers: authHeaders(),
+      query: orgQuery.value,
+    });
   } catch {
     actionError.value = "Failed to load overview.";
   }
@@ -1785,11 +1969,112 @@ async function loadSnaps() {
 async function loadAgents() {
   loadingAgents.value = true;
   try {
-    agents.value = await $fetch<AdminAgentSummary[]>(`${apiBase}/admin/agents`, { headers: authHeaders() });
+    agents.value = await $fetch<AdminAgentSummary[]>(`${apiBase}/admin/agents`, {
+      headers: authHeaders(),
+      query: orgQuery.value,
+    });
   } catch {
     actionError.value = "Failed to load agents.";
   } finally {
     loadingAgents.value = false;
+  }
+}
+
+async function onOnboardingLgaChange() {
+  onboardingForm.ward = "";
+  await loadWards(onboardingForm.lga);
+}
+
+async function onboardAgent() {
+  onboardingBusy.value = true;
+  onboardingError.value = "";
+  try {
+    const body: Record<string, string> = {
+      name: onboardingForm.name,
+      email: onboardingForm.email,
+      password: onboardingForm.password,
+      rank: onboardingForm.rank,
+      lga: onboardingForm.lga,
+    };
+    if (onboardingForm.rank !== "lga_supervisor" && onboardingForm.ward) {
+      body.ward = onboardingForm.ward;
+    }
+    if (onboardingForm.rank === "polling_unit_agent" && onboardingForm.polling_unit_code.trim()) {
+      body.polling_unit_code = onboardingForm.polling_unit_code.trim();
+    }
+    if (orgQuery.value.org_id) body.org_id = String(orgQuery.value.org_id);
+
+    await $fetch(`${apiBase}/admin/agents`, {
+      method: "POST",
+      headers: authHeaders(),
+      body,
+    });
+    onboardingForm.name = "";
+    onboardingForm.email = "";
+    onboardingForm.password = "";
+    onboardingForm.lga = "";
+    onboardingForm.ward = "";
+    onboardingForm.polling_unit_code = "";
+    onboardingWards.value = [];
+    message.value = "Agent account created.";
+    await loadAgents();
+  } catch (error: any) {
+    onboardingError.value = error?.data?.detail || "Failed to create agent account.";
+  } finally {
+    onboardingBusy.value = false;
+  }
+}
+
+function onAgentImportSelected(event: Event) {
+  const input = event.target as HTMLInputElement;
+  agentImportFile.value = input.files?.[0] || null;
+  agentImportMessage.value = agentImportFile.value ? agentImportFile.value.name : "";
+}
+
+function downloadAgentImportSample() {
+  const lines = [
+    "Name,Email,LGA,Ward,Rank,Password,Polling unit",
+    "Ada Supervisor,ada.lga@example.com,Abeokuta South,,lga_supervisor,ChangeMe123!,",
+    "Bola Ward,bola.ward@example.com,Abeokuta South,Ake I,ward_supervisor,ChangeMe123!,",
+    "Chidi PU,chidi.pu@example.com,Abeokuta South,Ake I,polling_unit_agent,ChangeMe123!,27-01-01-001",
+    "Dami Field,dami.field@example.com,Abeokuta South,Ake I,field_agent,ChangeMe123!,",
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "field-agents-sample.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importAgentsBulk() {
+  if (!agentImportFile.value) return;
+  agentImportBusy.value = true;
+  agentImportMessage.value = "";
+  try {
+    const body = new FormData();
+    body.append("file", agentImportFile.value);
+    const res = await $fetch<{ created: number; skipped: number; errors: string[] }>(
+      `${apiBase}/admin/agents/import`,
+      {
+        method: "POST",
+        headers: authHeaders(),
+        query: orgQuery.value,
+        body,
+      },
+    );
+    message.value = `Imported ${res.created} agent(s); skipped ${res.skipped}.`;
+    if (res.errors?.length) {
+      agentImportMessage.value = res.errors.slice(0, 3).join(" · ");
+    }
+    agentImportFile.value = null;
+    if (agentImportInput.value) agentImportInput.value.value = "";
+    await loadAgents();
+  } catch (error: any) {
+    actionError.value = error?.data?.detail || "Bulk import failed.";
+  } finally {
+    agentImportBusy.value = false;
   }
 }
 

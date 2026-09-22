@@ -5,9 +5,14 @@ export type InboxBroadcast = {
   body: string;
   attachment_url: string | null;
   state: string;
+  target_scope?: "all" | "lga" | "ward" | "polling_unit";
   lga: string;
   ward: string;
   polling_unit_code: string | null;
+  states?: string[];
+  lgas?: string[];
+  wards?: string[];
+  polling_unit_codes?: string[];
   audience: string;
   recipient_count: number;
   sender_name: string;
@@ -20,9 +25,14 @@ export type InboxPostCreate = {
   body: string;
   attachment_url?: string;
   state: string;
-  lga: string;
-  ward: string;
+  target_scope?: "all" | "lga" | "ward" | "polling_unit";
+  lga?: string;
+  ward?: string;
   polling_unit_code?: string;
+  states?: string[];
+  lgas?: string[];
+  wards?: string[];
+  polling_unit_codes?: string[];
   audience?: "voter" | "member" | "both";
 };
 

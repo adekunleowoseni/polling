@@ -79,7 +79,23 @@
     </aside>
 
     <div class="md:pl-72">
-      <header class="fixed left-0 right-0 top-0 z-40 h-16 bg-surface-container-lowest/80 shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl md:left-72">
+      <header class="fixed left-0 right-0 top-0 z-40 bg-surface-container-lowest/80 shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl md:left-72">
+        <div
+          v-if="isImpersonating"
+          class="flex items-center justify-between gap-3 border-b border-electric-pink/30 bg-electric-pink px-4 py-2 text-pure-white sm:px-8"
+        >
+          <p class="min-w-0 truncate text-sm font-semibold">
+            Managing <span class="underline">{{ admin?.org_name || "organization" }}</span> as Super Admin
+          </p>
+          <button
+            type="button"
+            class="shrink-0 rounded-lg bg-pure-white/15 px-3 py-1.5 text-xs font-bold uppercase tracking-wide hover:bg-pure-white/25 disabled:opacity-60"
+            :disabled="exitingImpersonation"
+            @click="exitImpersonation"
+          >
+            {{ exitingImpersonation ? "Exiting…" : "Exit org" }}
+          </button>
+        </div>
         <div class="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-8">
           <div class="flex min-w-0 flex-1 items-center gap-3">
             <button
@@ -102,6 +118,28 @@
             </div>
           </div>
           <div class="flex items-center gap-3">
+            <label
+              v-if="isSuperAdmin && !isImpersonating"
+              class="hidden min-w-[12rem] max-w-xs flex-col gap-0.5 md:flex"
+            >
+              <span class="font-label-caps text-[10px] uppercase tracking-wider text-outline">Organization</span>
+              <select
+                class="h-9 rounded-xl bg-off-white px-3 font-body-md text-sm text-on-surface outline-none"
+                :value="selectedOrgId || ''"
+                @change="onOrgChange(($event.target as HTMLSelectElement).value)"
+              >
+                <option v-if="!organizations.length" value="" disabled>No organizations</option>
+                <option v-for="org in organizations" :key="org.id" :value="org.id">
+                  {{ org.name }}
+                </option>
+              </select>
+            </label>
+            <div
+              v-else-if="isImpersonating"
+              class="hidden max-w-xs truncate rounded-xl bg-electric-pink/10 px-3 py-2 font-label-caps text-[10px] font-bold uppercase text-electric-pink md:block"
+            >
+              {{ admin?.org_name || "Tenant workspace" }}
+            </div>
             <div class="hidden items-center gap-2 rounded-full bg-surface-container-low px-3 py-1.5 md:flex">
               <span class="h-2 w-2 rounded-full bg-action-green" />
               <span class="font-label-caps text-label-caps text-on-surface">SOC-2 Validated</span>
@@ -120,7 +158,7 @@
         </div>
       </header>
 
-      <main class="min-h-screen w-full bg-background pt-16">
+      <main class="min-h-screen w-full bg-background" :class="isImpersonating ? 'pt-[7.5rem]' : 'pt-16'">
         <slot />
       </main>
     </div>
@@ -132,7 +170,8 @@
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, type AdminTabId } from "~/composables/useAdminShell";
 
 const router = useRouter();
-const { admin, canAccessTab, clear } = useAdminAuth();
+const { admin, canAccessTab, clear, isSuperAdmin, isImpersonating, authHeaders, apiBase, persistSession, refreshMe } =
+  useAdminAuth();
 const {
   activeTab,
   searchQuery,
@@ -141,6 +180,14 @@ const {
   setTab,
   toggleNavGroup,
 } = useAdminShell();
+const {
+  organizations,
+  selectedOrgId,
+  loadOrganizations,
+  selectOrganization,
+} = useAdminOrgContext();
+
+const exitingImpersonation = ref(false);
 
 const navGroups = computed(() =>
   ADMIN_NAV_GROUPS.map((group) => ({
@@ -150,9 +197,37 @@ const navGroups = computed(() =>
 );
 
 const roleLabel = computed(() => {
-  if (admin.value?.role === "state_admin") return admin.value.state ? `${admin.value.state} admin` : "State admin";
+  const role = admin.value?.role;
+  if (admin.value?.impersonating) return `Managing · ${admin.value.org_name || "org"}`;
+  if (role === "state_admin") return admin.value.state ? `${admin.value.state} admin` : "State admin";
+  if (role === "super_admin") return "Super admin";
+  if (role === "org_owner") return "Owner";
+  if (role === "director_general") return "Director-General";
+  if (role === "campaign_manager") return "Campaign Manager";
+  if (role === "org_admin") return "Admin";
+  if (role === "org_operator") return "Operator";
   return "Lead organizer";
 });
+
+async function exitImpersonation() {
+  exitingImpersonation.value = true;
+  try {
+    const session = await $fetch<{ api_token: string; admin: import("~/composables/useAdminAuth").Admin }>(
+      `${apiBase}/admin/organizations/exit-impersonation`,
+      { method: "POST", headers: authHeaders() },
+    );
+    persistSession(session);
+    setTab("organizations");
+  } catch {
+    await refreshMe();
+  } finally {
+    exitingImpersonation.value = false;
+  }
+}
+
+function onOrgChange(value: string) {
+  selectOrganization(value || null);
+}
 
 function isGroupOpen(groupId: string) {
   return openNavGroups.value.includes(groupId);
@@ -169,12 +244,15 @@ function logout() {
   router.push("/admin/login");
 }
 
-onMounted(() => {
+onMounted(async () => {
   // Older sessions only had command/crm/field open — surface fundraising & system.
   for (const id of ["fundraising", "system"] as const) {
     if (!openNavGroups.value.includes(id)) {
       openNavGroups.value = [...openNavGroups.value, id];
     }
+  }
+  if (isSuperAdmin.value) {
+    await loadOrganizations();
   }
 });
 

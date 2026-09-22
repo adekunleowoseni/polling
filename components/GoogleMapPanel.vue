@@ -17,10 +17,11 @@ const props = withDefaults(
 
 const emit = defineEmits<{ (e: "marker-click", id: string): void }>();
 
-const { key, hasKey } = useGoogleMapsKey();
+const { key, hasKey, ensureMapsKey } = useGoogleMapsKey();
 const mapEl = ref<HTMLElement | null>(null);
 const ready = ref(false);
 const loadError = ref("");
+const resolvingKey = ref(true);
 
 type GoogleMapsNs = {
   Map: new (el: HTMLElement, opts: Record<string, unknown>) => {
@@ -180,7 +181,10 @@ watch(
   { deep: true },
 );
 
-onMounted(() => {
+onMounted(async () => {
+  await ensureMapsKey();
+  resolvingKey.value = false;
+  await nextTick();
   void initMap();
 });
 
@@ -196,11 +200,17 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="relative h-full w-full overflow-hidden bg-deep-navy">
-    <div v-if="!hasKey" class="flex h-full items-center justify-center p-6 text-center">
+    <div
+      v-if="resolvingKey"
+      class="flex h-full items-center justify-center p-6 text-center text-sm text-pure-white/80"
+    >
+      Loading map configuration…
+    </div>
+    <div v-else-if="!hasKey" class="flex h-full items-center justify-center p-6 text-center">
       <p class="max-w-sm text-sm text-pure-white/80">
-        Add <code class="text-action-green">NUXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to
-        <code class="text-action-green">frontend/.env</code> (same key as mobile) and restart the Nuxt
-        server.
+        Google Maps is not configured. A super admin can set the API key under
+        <span class="text-action-green">System → Integrations</span>, or set
+        <code class="text-action-green">NUXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> as a fallback.
       </p>
     </div>
     <div v-else-if="loadError" class="flex h-full items-center justify-center p-6 text-center">

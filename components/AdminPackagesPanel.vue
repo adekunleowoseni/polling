@@ -5,11 +5,13 @@ import {
   type PackageDistributionCreate,
   type PackageKit,
 } from "~/composables/usePackages";
+import { useGeoTargeting, wardLabel } from "~/composables/useGeoTargeting";
 
 const emit = defineEmits<{ (e: "error", msg: string): void; (e: "message", msg: string): void }>();
 
 const { loadDistributions, createDistribution, loadKits, createKit, deleteKit } = usePackages();
 const { admin } = useAdminAuth();
+const geo = useGeoTargeting({ target_scope: "ward", states: [admin.value?.state || "Ogun State"] });
 
 const loading = ref(true);
 const syncing = ref(false);
@@ -26,15 +28,10 @@ const deletingKitId = ref<string | null>(null);
 const statusFilter = ref<"all" | "active" | "completed" | "accepted">("all");
 const lastSyncedAt = ref<Date | null>(null);
 
-const form = reactive<PackageDistributionCreate>({
+const form = reactive({
   title: "GOTV door leaflet pack",
-  state: admin.value?.state ?? "Ogun State",
-  lga: "",
-  ward: "",
-  polling_unit_code: "",
-  polling_unit_name: "",
-  audience: "both",
-  package_count: undefined,
+  audience: "both" as "voter" | "member" | "both",
+  package_count: undefined as number | undefined,
   auto_count: true,
 });
 
@@ -127,10 +124,6 @@ const dispatchOptions: { id: "express" | "hub" | "print"; title: string; detail:
   },
 ];
 
-const lgas = ref<string[]>([]);
-const wards = ref<string[]>([]);
-const stateCode = computed(() => "ogun");
-
 const totalPackages = computed(() => items.value.reduce((s, i) => s + i.package_count, 0));
 const totalClaimed = computed(() => items.value.reduce((s, i) => s + i.packages_claimed, 0));
 const activeCount = computed(() => items.value.filter((i) => i.status === "active").length);
@@ -213,7 +206,7 @@ const stockRows = computed(() => {
 
 const liveRouteLabel = computed(() => {
   const hit = items.value.find((i) => i.status === "active" && i.agent_name);
-  if (!hit) return form.lga ? `${form.lga} hub` : "Ogun field mesh";
+  if (!hit) return geo.form.lgas[0] ? `${geo.form.lgas[0]} hub` : "Ogun field mesh";
   return `${hit.ward} · ${hit.lga}`;
 });
 
@@ -227,37 +220,6 @@ watch(bundleId, (id) => {
     }
   }
 });
-
-async function loadGeo() {
-  const config = useRuntimeConfig();
-  lgas.value = await $fetch<string[]>(`${config.public.apiBase}/geo/states/${stateCode.value}/lgas`);
-}
-
-watch(
-  () => form.state,
-  async () => {
-    form.lga = "";
-    form.ward = "";
-    wards.value = [];
-    await loadGeo();
-  },
-  { immediate: true },
-);
-
-watch(
-  () => form.lga,
-  async (lga) => {
-    form.ward = "";
-    if (!lga) {
-      wards.value = [];
-      return;
-    }
-    const config = useRuntimeConfig();
-    wards.value = await $fetch<string[]>(
-      `${config.public.apiBase}/geo/states/${stateCode.value}/lgas/${encodeURIComponent(lga)}/wards`,
-    );
-  },
-);
 
 async function refreshKits() {
   try {
@@ -307,16 +269,18 @@ function scrollToBuilder() {
 
 async function triggerDistributionBatch() {
   scrollToBuilder();
-  if (!form.lga || !form.ward) {
-    emit("message", "Select LGA and ward in the builder, then confirm the batch pack order.");
+  const geoErr = geo.validate();
+  if (geoErr) {
+    emit("message", `${geoErr} Then confirm the batch pack order.`);
     return;
   }
   await submit();
 }
 
 async function submit() {
-  if (!form.lga || !form.ward) {
-    emit("error", "Select LGA and ward turf.");
+  const geoErr = geo.validate();
+  if (geoErr) {
+    emit("error", geoErr);
     scrollToBuilder();
     return;
   }
@@ -334,22 +298,19 @@ async function submit() {
         : dispatchMode.value === "print"
           ? " · POD drop-ship"
           : " · hub staging";
+    const geoPayload = geo.toPayload();
     const body: PackageDistributionCreate = {
       title: `${(form.title.trim() || bundle?.formTitle || "Field pack")}${modeNote}`,
-      state: form.state || "Ogun State",
-      lga: form.lga,
-      ward: form.ward,
       audience: form.audience,
       auto_count: form.auto_count,
+      ...geoPayload,
     };
-    if (form.polling_unit_code?.trim()) body.polling_unit_code = form.polling_unit_code.trim();
-    if (form.polling_unit_name?.trim()) body.polling_unit_name = form.polling_unit_name.trim();
     if (!form.auto_count && form.package_count) body.package_count = form.package_count;
 
     const created = await createDistribution(body);
     emit(
       "message",
-      `Batch ${shortId(created.id)} transmitted to ${created.ward}, ${created.lga} · ${created.package_count.toLocaleString()} pack(s). Agents in this ward can accept it.`,
+      `Batch ${shortId(created.id)} transmitted to ${geo.targetSummary} · ${created.package_count.toLocaleString()} pack(s).`,
     );
     statusFilter.value = "all";
     page.value = 1;
@@ -768,48 +729,136 @@ onMounted(() => void refresh());
             <span class="material-symbols-outlined text-[18px] text-outline">map</span>
           </div>
           <p class="font-body-md text-xs text-on-surface-variant">
-            Target LGA and ward clusters, then optionally narrow to a polling unit.
+            Select one or more states, LGAs, wards, or polling units.
           </p>
           <div class="mt-2 flex flex-col gap-2">
             <label class="block">
-              <span class="font-label-caps text-[10px] uppercase text-outline">State</span>
+              <span class="font-label-caps text-[10px] uppercase text-outline">Target level</span>
               <select
-                v-model="form.state"
+                v-model="geo.form.target_scope"
                 class="mt-1 w-full rounded-lg bg-surface-container-lowest px-3 py-2.5 text-sm text-primary outline-none"
               >
-                <option>Ogun State</option>
+                <option value="all">All (selected state(s))</option>
+                <option value="lga">Some LGA(s)</option>
+                <option value="ward">Some ward(s)</option>
+                <option value="polling_unit">Some polling unit(s)</option>
               </select>
             </label>
-            <label class="block">
-              <span class="font-label-caps text-[10px] uppercase text-outline">LGA</span>
-              <select
-                v-model="form.lga"
-                class="mt-1 w-full rounded-lg bg-surface-container-lowest px-3 py-2.5 text-sm text-primary outline-none"
+            <div>
+              <span class="font-label-caps text-[10px] uppercase text-outline">State(s)</span>
+              <div class="mt-1 flex flex-wrap gap-2">
+                <label
+                  v-for="s in geo.availableStates"
+                  :key="s.code"
+                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-surface-container-lowest px-2.5 py-2 text-xs"
+                >
+                  <input
+                    type="checkbox"
+                    class="accent-electric-pink"
+                    :checked="geo.form.states.includes(s.name)"
+                    @change="geo.toggleState(s.name)"
+                  />
+                  {{ s.name }}
+                </label>
+              </div>
+            </div>
+            <div v-if="geo.form.target_scope === 'lga'" class="max-h-36 overflow-y-auto rounded-lg bg-surface-container-lowest p-2">
+              <label
+                v-for="g in geo.lgas"
+                :key="g"
+                class="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-surface-container"
               >
-                <option value="">Select LGA</option>
-                <option v-for="g in lgas" :key="g" :value="g">{{ g }}</option>
-              </select>
-            </label>
-            <label class="block">
-              <span class="font-label-caps text-[10px] uppercase text-outline">Ward</span>
-              <select
-                v-model="form.ward"
-                class="mt-1 w-full rounded-lg bg-surface-container-lowest px-3 py-2.5 text-sm text-primary outline-none disabled:opacity-50"
-                :disabled="!form.lga"
-              >
-                <option value="">Select ward</option>
-                <option v-for="w in wards" :key="w" :value="w">{{ w }}</option>
-              </select>
-            </label>
-            <label class="block">
-              <span class="font-label-caps text-[10px] uppercase text-outline">Polling unit (optional)</span>
-              <input
-                v-model="form.polling_unit_code"
-                type="text"
-                class="mt-1 w-full rounded-lg bg-surface-container-lowest px-3 py-2.5 text-sm text-primary outline-none"
-                placeholder="e.g. 27-01-01-001"
-              />
-            </label>
+                <input
+                  type="checkbox"
+                  class="accent-electric-pink"
+                  :checked="geo.form.lgas.includes(g)"
+                  @change="geo.toggleLga(g)"
+                />
+                {{ g }}
+              </label>
+            </div>
+            <template v-if="geo.form.target_scope === 'ward'">
+              <label class="block">
+                <span class="font-label-caps text-[10px] uppercase text-outline">Add wards from LGA</span>
+                <select
+                  class="mt-1 w-full rounded-lg bg-surface-container-lowest px-3 py-2.5 text-sm outline-none"
+                  :value="geo.wardPickerLga"
+                  @change="geo.loadWardsForPicker(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">Select LGA</option>
+                  <option v-for="g in geo.lgas" :key="g" :value="g">{{ g }}</option>
+                </select>
+              </label>
+              <div v-if="geo.wardsForPicker.length" class="max-h-28 overflow-y-auto rounded-lg bg-surface-container-lowest p-2">
+                <label
+                  v-for="w in geo.wardsForPicker"
+                  :key="w"
+                  class="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-surface-container"
+                >
+                  <input
+                    type="checkbox"
+                    class="accent-electric-pink"
+                    :checked="geo.isWardSelected(geo.wardPickerLga, w)"
+                    @change="geo.toggleWard(geo.wardPickerLga, w)"
+                  />
+                  {{ w }}
+                </label>
+              </div>
+              <div v-if="geo.form.wards.length" class="flex flex-wrap gap-1">
+                <span
+                  v-for="w in geo.form.wards"
+                  :key="w"
+                  class="rounded-full bg-surface-container px-2 py-0.5 text-[10px] text-primary"
+                >
+                  {{ wardLabel(w) }}
+                </span>
+              </div>
+            </template>
+            <template v-if="geo.form.target_scope === 'polling_unit'">
+              <label class="block">
+                <span class="font-label-caps text-[10px] uppercase text-outline">LGA</span>
+                <select
+                  class="mt-1 w-full rounded-lg bg-surface-container-lowest px-3 py-2.5 text-sm outline-none"
+                  :value="geo.puPickerLga"
+                  @change="
+                    geo.puPickerWard = '';
+                    geo.puPickerLga = ($event.target as HTMLSelectElement).value;
+                    geo.loadWardsForPicker(geo.puPickerLga);
+                  "
+                >
+                  <option value="">Select LGA</option>
+                  <option v-for="g in geo.lgas" :key="g" :value="g">{{ g }}</option>
+                </select>
+              </label>
+              <label class="block">
+                <span class="font-label-caps text-[10px] uppercase text-outline">Ward</span>
+                <select
+                  class="mt-1 w-full rounded-lg bg-surface-container-lowest px-3 py-2.5 text-sm outline-none disabled:opacity-50"
+                  :disabled="!geo.puPickerLga"
+                  :value="geo.puPickerWard"
+                  @change="geo.loadUnitsForPicker(geo.puPickerLga, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">Select ward</option>
+                  <option v-for="w in geo.wardsForPicker" :key="w" :value="w">{{ w }}</option>
+                </select>
+              </label>
+              <div v-if="geo.unitsForPicker.length" class="max-h-28 overflow-y-auto rounded-lg bg-surface-container-lowest p-2">
+                <label
+                  v-for="u in geo.unitsForPicker"
+                  :key="u.code"
+                  class="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-surface-container"
+                >
+                  <input
+                    type="checkbox"
+                    class="accent-electric-pink"
+                    :checked="geo.form.polling_unit_codes.includes(u.code)"
+                    @change="geo.togglePu(u.code)"
+                  />
+                  {{ u.code }}
+                </label>
+              </div>
+              <p class="text-[10px] text-outline">{{ geo.form.polling_unit_codes.length }} PU(s) selected</p>
+            </template>
             <label class="block">
               <span class="font-label-caps text-[10px] uppercase text-outline">Audience</span>
               <select
@@ -972,7 +1021,7 @@ onMounted(() => void refresh());
         <button
           type="button"
           class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 font-button-text text-sm font-semibold text-pure-white shadow-sm transition hover:bg-primary-container disabled:opacity-50 sm:w-auto"
-          :disabled="busy || !form.lga || !form.ward"
+          :disabled="busy || !!geo.validate()"
           @click="submit"
         >
           <span class="material-symbols-outlined text-[18px]" :class="busy ? 'animate-spin' : ''">
@@ -1217,7 +1266,7 @@ onMounted(() => void refresh());
 
         <div class="flex flex-col gap-2 pt-2">
           <span class="font-label-caps text-xs font-semibold text-on-surface-variant">
-            {{ form.lga || "OGUN" }} CENTRAL PACK STAGING
+            {{ geo.form.lgas[0] || geo.form.states[0] || "OGUN" }} CENTRAL PACK STAGING
           </span>
           <div class="group relative overflow-hidden rounded-xl bg-deep-navy">
             <div

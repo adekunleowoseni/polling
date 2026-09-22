@@ -383,8 +383,8 @@
               </div>
             </div>
           </div>
-        </div>
-      </section>
+      </div>
+    </section>
 
       <section id="infrastructure" class="w-full scroll-mt-20 bg-surface-container-low py-20">
         <div class="mx-auto max-w-container-max px-margin-mobile lg:px-gutter">
@@ -526,7 +526,7 @@
                       <circle cx="120" cy="30" fill="#92D80A" r="5" />
                       <circle cx="240" cy="25" fill="#92D80A" r="5" />
                       <circle cx="310" cy="35" fill="#FF387F" r="6" />
-                    </svg>
+              </svg>
                   </div>
                   <div class="grid grid-cols-3 gap-2 pt-1 text-center font-label-caps text-[11px]">
                     <div class="rounded bg-surface-tint/20 py-1.5">148 Doors Done</div>
@@ -680,8 +680,8 @@
               <div class="flex items-center gap-3 border-t border-surface-container pt-4">
                 <div class="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-pure-white" :class="quote.avatar">
                   {{ quote.initials }}
-                </div>
-                <div>
+            </div>
+            <div>
                   <div class="font-button-text text-sm font-semibold text-primary">{{ quote.name }}</div>
                   <div class="font-label-caps text-[11px] text-on-surface-variant">{{ quote.role }}</div>
                 </div>
@@ -810,7 +810,7 @@
             <span>© 2026 e-mobilize Technologies Inc.</span>
           </div>
         </div>
-      </div>
+    </div>
     </footer>
   </div>
 </template>

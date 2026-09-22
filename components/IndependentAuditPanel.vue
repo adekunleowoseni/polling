@@ -1,10 +1,26 @@
 <script setup lang="ts">
+type PartyCandidate = {
+  id: string;
+  name: string;
+  post?: string;
+  has_photo?: boolean;
+  photo_url?: string | null;
+  photo_updated_at?: string | null;
+};
+
 type AuditParty = {
   code: string;
   name: string;
   color: string;
   candidate?: string;
   sort_order: number;
+  has_candidate_photo?: boolean;
+  candidate_photo_url?: string | null;
+  candidate_photo_updated_at?: string | null;
+  has_party_photo?: boolean;
+  party_photo_url?: string | null;
+  party_photo_updated_at?: string | null;
+  candidates?: PartyCandidate[];
 };
 
 type AuditStanding = {
@@ -14,6 +30,13 @@ type AuditStanding = {
   color: string;
   votes: number;
   share: number;
+  has_candidate_photo?: boolean;
+  candidate_photo_url?: string | null;
+  candidate_photo_updated_at?: string | null;
+  has_party_photo?: boolean;
+  party_photo_url?: string | null;
+  party_photo_updated_at?: string | null;
+  candidates?: PartyCandidate[];
 };
 
 type AuditLgaRow = {
@@ -105,6 +128,8 @@ const lgaQuery = ref("");
 const zoom = ref(1);
 const sheetOpen = ref(false);
 const expandedMatrix = ref("");
+const matrixLevel = ref<"lga" | "ward" | "pu">("lga");
+const matrixLoading = ref(false);
 
 const tabs = [
   { id: "standings" as const, label: "Standings", full: "State Standings", icon: "leaderboard" },
@@ -123,10 +148,21 @@ const scopedStandings = computed<AuditStanding[]>(() => {
     ? (board.value?.lgas ?? []).find((row) => row.name === standingsLga.value)
     : null;
   if (!lga) {
-    return (board.value?.standings ?? []).map((row) => ({
-      ...row,
-      candidate: row.candidate || parties.find((party) => party.code === row.code)?.candidate || "",
-    }));
+    return (board.value?.standings ?? []).map((row) => {
+      const party = parties.find((p) => p.code === row.code);
+      return {
+        ...row,
+        candidate: row.candidate || party?.candidate || "",
+        has_candidate_photo: row.has_candidate_photo ?? party?.has_candidate_photo,
+        candidate_photo_url: row.candidate_photo_url ?? party?.candidate_photo_url,
+        candidate_photo_updated_at:
+          row.candidate_photo_updated_at ?? party?.candidate_photo_updated_at,
+        has_party_photo: row.has_party_photo ?? party?.has_party_photo,
+        party_photo_url: row.party_photo_url ?? party?.party_photo_url,
+        party_photo_updated_at: row.party_photo_updated_at ?? party?.party_photo_updated_at,
+        candidates: row.candidates?.length ? row.candidates : party?.candidates || [],
+      };
+    });
   }
   const total = parties.reduce((sum, party) => sum + (lga.party_votes[party.code] || 0), 0);
   return [...parties]
@@ -139,6 +175,13 @@ const scopedStandings = computed<AuditStanding[]>(() => {
         color: party.color,
         votes,
         share: total ? Math.round((votes / total) * 1000) / 10 : 0,
+        has_candidate_photo: party.has_candidate_photo,
+        candidate_photo_url: party.candidate_photo_url,
+        candidate_photo_updated_at: party.candidate_photo_updated_at,
+        has_party_photo: party.has_party_photo,
+        party_photo_url: party.party_photo_url,
+        party_photo_updated_at: party.party_photo_updated_at,
+        candidates: party.candidates || [],
       };
     })
     .sort((a, b) => b.votes - a.votes || a.code.localeCompare(b.code));
@@ -175,6 +218,37 @@ const donutLegend = computed(() => scopedStandings.value.filter((row) => row.vot
 
 function displayName(row: { candidate?: string; name: string }) {
   return row.candidate?.trim() || row.name;
+}
+
+function mediaUrl(path: string | null | undefined, updatedAt?: string | null) {
+  if (!path) return "";
+  const base = String(props.apiBase || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const bust = updatedAt ? `?t=${encodeURIComponent(String(updatedAt))}` : "";
+  return `${base}${normalized}${bust}`;
+}
+
+function partyPhotoUrl(row: {
+  has_party_photo?: boolean;
+  party_photo_url?: string | null;
+  party_photo_updated_at?: string | null;
+}) {
+  if (!row.has_party_photo || !row.party_photo_url) return "";
+  return mediaUrl(row.party_photo_url, row.party_photo_updated_at);
+}
+
+function candidatePhotoUrl(row: {
+  has_candidate_photo?: boolean;
+  candidate_photo_url?: string | null;
+  candidate_photo_updated_at?: string | null;
+  candidates?: PartyCandidate[];
+}) {
+  if (row.has_candidate_photo && row.candidate_photo_url) {
+    return mediaUrl(row.candidate_photo_url, row.candidate_photo_updated_at);
+  }
+  const withPhoto = (row.candidates || []).find((c) => c.has_photo && c.photo_url);
+  if (withPhoto) return mediaUrl(withPhoto.photo_url, withPhoto.photo_updated_at);
+  return "";
 }
 
 const filteredLgas = computed(() => {
@@ -226,6 +300,66 @@ const selectedWardMeta = computed(
   () => (explorer.value?.wards ?? []).find((ward) => ward.name === selectedWard.value) || null,
 );
 
+type MatrixWardRow = {
+  name: string;
+  pu_total: number;
+  uploaded: number;
+  progress_pct: number;
+  party_votes: Record<string, number>;
+  total_votes: number;
+};
+
+const matrixWardRows = computed<MatrixWardRow[]>(() => {
+  const wards = explorer.value?.wards ?? [];
+  const units = explorer.value?.units ?? [];
+  const parties = matrixParties.value;
+  return wards.map((ward) => {
+    const wardUnitsList = units.filter((unit) => unit.ward === ward.name);
+    const party_votes: Record<string, number> = {};
+    for (const party of parties) party_votes[party.code] = 0;
+    let total_votes = 0;
+    for (const unit of wardUnitsList) {
+      for (const party of parties) {
+        const votes = unit.party_votes[party.code] || 0;
+        party_votes[party.code] += votes;
+      }
+      total_votes += unit.votes || 0;
+    }
+    return {
+      name: ward.name,
+      pu_total: ward.pu_total,
+      uploaded: ward.uploaded,
+      progress_pct: ward.progress_pct,
+      party_votes,
+      total_votes,
+    };
+  });
+});
+
+const matrixBreadcrumb = computed(() => {
+  if (matrixLevel.value === "pu") {
+    return `${selectedLga.value} · ${selectedWard.value || "Ward"}`;
+  }
+  if (matrixLevel.value === "ward") return selectedLga.value || "LGA";
+  return "Ogun State";
+});
+
+const matrixTitle = computed(() => {
+  if (matrixLevel.value === "pu") return `${selectedWard.value || "Ward"} polling units`;
+  if (matrixLevel.value === "ward") return `${selectedLga.value} wards`;
+  return "LGA collation matrix";
+});
+
+const matrixSubtitle = computed(() => {
+  if (matrixLevel.value === "pu") {
+    return `${selectedWardMeta.value?.uploaded ?? 0}/${selectedWardMeta.value?.pu_total ?? 0} uploaded · tap a polling unit for EC8A`;
+  }
+  if (matrixLevel.value === "ward") {
+    return `${explorer.value?.wards.length ?? 0} wards · tap a ward to open polling units`;
+  }
+  return `Votes by party across ${board.value?.lgas.length ?? 0} local governments · tap an LGA to open wards`;
+});
+
 function auditUrl(path: string, query?: Record<string, string>) {
   const base = String(props.apiBase || "http://127.0.0.1:8000").replace(/\/+$/, "");
   const url = new URL(path, `${base}/`);
@@ -244,6 +378,10 @@ async function fetchJson<T>(path: string, query?: Record<string, string>): Promi
 watch(activeTab, (tab) => {
   sheetOpen.value = false;
   if (tab === "explorer") void ensureExplorer();
+  if (tab === "matrix" && matrixLevel.value !== "lga") {
+    // Keep drill state when returning to matrix; ensure explorer data for current LGA.
+    if (selectedLga.value) void ensureExplorer();
+  }
 });
 
 watch(selectedLga, (name, previous) => {
@@ -273,14 +411,18 @@ async function ensureExplorer() {
   await loadExplorer(selectedLga.value);
 }
 
-async function loadExplorer(lga: string) {
+async function loadExplorer(lga: string, preferredWard?: string) {
   explorerLoading.value = true;
+  matrixLoading.value = activeTab.value === "matrix";
   sheetOpen.value = false;
   try {
     const data = await fetchJson<AuditExplorer>("/public/audit/explorer", { lga });
     explorer.value = data;
     selectedLga.value = data.lga;
-    const firstWard = data.wards[0]?.name || "";
+    const firstWard =
+      (preferredWard && data.wards.some((ward) => ward.name === preferredWard) && preferredWard) ||
+      data.wards[0]?.name ||
+      "";
     selectedWard.value = firstWard;
     const firstUnit =
       data.units.find((unit) => unit.ward === firstWard && unit.uploaded) ||
@@ -292,6 +434,7 @@ async function loadExplorer(lga: string) {
     explorer.value = null;
   } finally {
     explorerLoading.value = false;
+    matrixLoading.value = false;
   }
 }
 
@@ -303,7 +446,34 @@ function openLgaInExplorer(name: string) {
   selectedLga.value = name;
   standingsLga.value = name;
   activeTab.value = "explorer";
+  matrixLevel.value = "lga";
   void loadExplorer(name);
+}
+
+async function openMatrixLga(name: string) {
+  selectedLga.value = name;
+  matrixLevel.value = "ward";
+  expandedMatrix.value = "";
+  sheetOpen.value = false;
+  await loadExplorer(name);
+}
+
+function openMatrixWard(name: string) {
+  selectWard(name);
+  matrixLevel.value = "pu";
+  sheetOpen.value = false;
+}
+
+function matrixBack() {
+  sheetOpen.value = false;
+  if (matrixLevel.value === "pu") {
+    matrixLevel.value = "ward";
+    return;
+  }
+  if (matrixLevel.value === "ward") {
+    matrixLevel.value = "lga";
+    selectedWard.value = "";
+  }
 }
 
 function selectWard(name: string) {
@@ -327,6 +497,7 @@ function closeSheet() {
 }
 
 function toggleMatrix(name: string) {
+  // Mobile: first expand party chips; second path is full drill via "Open wards".
   expandedMatrix.value = expandedMatrix.value === name ? "" : name;
 }
 
@@ -605,22 +776,80 @@ onMounted(() => {
             </div>
             <div class="min-w-0 flex-1">
               <p class="text-center font-label-caps text-on-surface-variant sm:text-left">Leading candidate</p>
-              <p class="mt-1 text-center font-headline-md text-xl font-bold text-primary sm:text-left">
-                {{ leader ? displayName(leader) : "Awaiting party totals" }}
-              </p>
-              <p class="mt-1 text-center font-body-md text-sm text-on-surface-variant sm:text-left">
-                <span v-if="leader">
-                  {{ leader.code }} · {{ leader.name }} · {{ formatNum(leader.votes) }} · {{ formatPct(leader.share, 1) }}
-                </span>
-                <span v-else>Select an LGA or wait for transcribed EC8A party boxes.</span>
-              </p>
+              <div class="mt-2 flex flex-col items-center gap-3 sm:flex-row sm:items-center">
+                <div v-if="leader" class="flex shrink-0 items-center gap-2">
+                  <div
+                    class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl text-xs font-bold text-slate-950 ring-1 ring-outline-variant/30"
+                    :style="partyPhotoUrl(leader) ? undefined : { background: leader.color }"
+                    title="Party"
+                  >
+                    <img
+                      v-if="partyPhotoUrl(leader)"
+                      :src="partyPhotoUrl(leader)"
+                      :alt="leader.name"
+                      class="h-full w-full object-cover"
+                    />
+                    <span v-else>{{ leader.code.slice(0, 2) }}</span>
+                  </div>
+                  <div
+                    class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-slate-950 ring-2 ring-outline-variant/30"
+                    :style="{ background: leader.color }"
+                    title="Candidate"
+                  >
+                    <img
+                      v-if="candidatePhotoUrl(leader)"
+                      :src="candidatePhotoUrl(leader)"
+                      :alt="displayName(leader)"
+                      class="h-full w-full object-cover"
+                    />
+                    <span v-else>{{ leader.code.slice(0, 2) }}</span>
+                  </div>
+                </div>
+                <div class="min-w-0 text-center sm:text-left">
+                  <p class="font-headline-md text-xl font-bold text-primary">
+                    {{ leader ? displayName(leader) : "Awaiting party totals" }}
+                  </p>
+                  <p class="mt-1 font-body-md text-sm text-on-surface-variant">
+                    <span v-if="leader">
+                      {{ leader.code }} · {{ leader.name }} · {{ formatNum(leader.votes) }} ·
+                      {{ formatPct(leader.share, 1) }}
+                    </span>
+                    <span v-else>Select an LGA or wait for transcribed EC8A party boxes.</span>
+                  </p>
+                </div>
+              </div>
               <ul class="mt-4 space-y-2">
                 <li
                   v-for="row in donutLegend.length ? donutLegend : scopedStandings.slice(0, 6)"
                   :key="`legend-${row.code}`"
                   class="flex items-center gap-2 text-sm"
                 >
-                  <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ background: row.color }" />
+                  <div class="flex shrink-0 items-center gap-1">
+                    <div
+                      class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-md text-[8px] font-bold text-slate-950"
+                      :style="partyPhotoUrl(row) ? undefined : { background: row.color }"
+                    >
+                      <img
+                        v-if="partyPhotoUrl(row)"
+                        :src="partyPhotoUrl(row)"
+                        :alt="row.name"
+                        class="h-full w-full object-cover"
+                      />
+                      <span v-else class="h-2 w-2 rounded-full bg-white/80" />
+                    </div>
+                    <div
+                      class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full text-[9px] font-bold text-slate-950"
+                      :style="{ background: row.color }"
+                    >
+                      <img
+                        v-if="candidatePhotoUrl(row)"
+                        :src="candidatePhotoUrl(row)"
+                        :alt="displayName(row)"
+                        class="h-full w-full object-cover"
+                      />
+                      <span v-else class="h-2 w-2 rounded-full bg-white/80" />
+                    </div>
+                  </div>
                   <span class="min-w-0 flex-1 truncate font-medium text-on-surface">{{ displayName(row) }}</span>
                   <span class="tabular-nums text-outline">{{ formatPct(row.share, 1) }}</span>
                 </li>
@@ -639,11 +868,39 @@ onMounted(() => {
             <div
               v-for="row in scopedStandings"
               :key="`bar-${row.code}`"
-              class="grid grid-cols-[4.5rem_1fr] items-center gap-3 sm:grid-cols-[7.5rem_1fr]"
+              class="grid grid-cols-[5.5rem_1fr] items-center gap-3 sm:grid-cols-[9rem_1fr]"
             >
-              <div class="min-w-0 text-right">
-                <p class="truncate text-[11px] font-bold" :style="{ color: row.color }">{{ row.code }}</p>
-                <p class="hidden truncate text-[10px] text-outline sm:block">{{ displayName(row) }}</p>
+              <div class="flex min-w-0 items-center justify-end gap-2">
+                <div class="hidden shrink-0 items-center gap-1 sm:flex">
+                  <div
+                    class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-md text-[8px] font-bold text-slate-950"
+                    :style="partyPhotoUrl(row) ? undefined : { background: row.color }"
+                  >
+                    <img
+                      v-if="partyPhotoUrl(row)"
+                      :src="partyPhotoUrl(row)"
+                      :alt="row.name"
+                      class="h-full w-full object-cover"
+                    />
+                    <span v-else>{{ row.code.slice(0, 1) }}</span>
+                  </div>
+                  <div
+                    class="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full text-[8px] font-bold text-slate-950"
+                    :style="{ background: row.color }"
+                  >
+                    <img
+                      v-if="candidatePhotoUrl(row)"
+                      :src="candidatePhotoUrl(row)"
+                      :alt="displayName(row)"
+                      class="h-full w-full object-cover"
+                    />
+                    <span v-else>{{ row.code.slice(0, 1) }}</span>
+                  </div>
+                </div>
+                <div class="min-w-0 text-right">
+                  <p class="truncate text-[11px] font-bold" :style="{ color: row.color }">{{ row.code }}</p>
+                  <p class="hidden truncate text-[10px] text-outline sm:block">{{ displayName(row) }}</p>
+                </div>
               </div>
               <div>
                 <div class="h-3 overflow-hidden rounded-full bg-surface-container-high sm:h-3.5">
@@ -668,6 +925,34 @@ onMounted(() => {
           >
             <div class="flex items-center gap-3">
               <span class="w-5 font-label-caps text-xs font-bold text-outline">{{ index + 1 }}</span>
+              <div class="flex shrink-0 items-center gap-1.5">
+                <div
+                  class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl text-[10px] font-black text-slate-950 ring-1 ring-outline-variant/25"
+                  :style="partyPhotoUrl(row) ? undefined : { background: row.color }"
+                  title="Party"
+                >
+                  <img
+                    v-if="partyPhotoUrl(row)"
+                    :src="partyPhotoUrl(row)"
+                    :alt="row.name"
+                    class="h-full w-full object-cover"
+                  />
+                  <span v-else>{{ row.code.slice(0, 2) }}</span>
+                </div>
+                <div
+                  class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-[10px] font-black text-slate-950 ring-1 ring-outline-variant/25"
+                  :style="{ background: row.color }"
+                  title="Candidate"
+                >
+                  <img
+                    v-if="candidatePhotoUrl(row)"
+                    :src="candidatePhotoUrl(row)"
+                    :alt="displayName(row)"
+                    class="h-full w-full object-cover"
+                  />
+                  <span v-else>{{ (displayName(row) || row.code).slice(0, 2).toUpperCase() }}</span>
+                </div>
+              </div>
               <span
                 class="min-w-[3.1rem] rounded-md px-1.5 py-1 text-center text-[11px] font-black text-pure-white"
                 :style="{ background: row.color }"
@@ -910,6 +1195,32 @@ onMounted(() => {
                 :key="party.code"
                 class="rounded-xl bg-surface-container-low px-1 py-2 text-center"
               >
+                <div class="mb-1 flex items-center justify-center gap-1">
+                  <div
+                    class="flex h-6 w-6 items-center justify-center overflow-hidden rounded text-[7px] font-bold text-slate-950"
+                    :style="partyPhotoUrl(party) ? undefined : { background: party.color }"
+                  >
+                    <img
+                      v-if="partyPhotoUrl(party)"
+                      :src="partyPhotoUrl(party)"
+                      :alt="party.name"
+                      class="h-full w-full object-cover"
+                    />
+                    <span v-else>{{ party.code.slice(0, 1) }}</span>
+                  </div>
+                  <div
+                    class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full text-[7px] font-bold text-slate-950"
+                    :style="{ background: party.color }"
+                  >
+                    <img
+                      v-if="candidatePhotoUrl(party)"
+                      :src="candidatePhotoUrl(party)"
+                      :alt="displayName(party)"
+                      class="h-full w-full object-cover"
+                    />
+                    <span v-else>{{ party.code.slice(0, 1) }}</span>
+                  </div>
+                </div>
                 <span class="block text-[10px] font-bold" :style="{ color: party.color }">{{ party.code }}</span>
                 <span class="mt-1 block text-xs font-semibold tabular-nums text-on-surface">
                   {{ selectedUnit?.party_votes[party.code] ?? 0 }}
@@ -942,13 +1253,26 @@ onMounted(() => {
     <!-- Matrix -->
     <section v-else class="space-y-4">
       <div class="flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-surface-container-lowest px-5 py-5 shadow-sm">
-        <div>
-          <h2 class="font-headline-md text-xl font-bold text-primary">LGA collation matrix</h2>
-          <p class="mt-1 font-body-md text-sm text-on-surface-variant">
-            Votes by party across {{ board?.lgas.length ?? 0 }} local governments.
-          </p>
+        <div class="min-w-0">
+          <div class="mb-2 flex flex-wrap items-center gap-2">
+            <button
+              v-if="matrixLevel !== 'lga'"
+              type="button"
+              class="inline-flex h-9 items-center gap-1 rounded-xl bg-surface-container-low px-3 font-button-text text-xs font-semibold text-primary transition hover:bg-surface-container"
+              @click="matrixBack"
+            >
+              <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+              Back
+            </button>
+            <p class="font-label-caps text-[10px] uppercase tracking-wider text-outline">
+              {{ matrixBreadcrumb }}
+            </p>
+          </div>
+          <h2 class="font-headline-md text-xl font-bold text-primary">{{ matrixTitle }}</h2>
+          <p class="mt-1 font-body-md text-sm text-on-surface-variant">{{ matrixSubtitle }}</p>
         </div>
         <button
+          v-if="matrixLevel === 'lga'"
           type="button"
           class="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-4 font-button-text text-sm font-semibold text-pure-white shadow-sm transition hover:opacity-95"
           @click="exportCsv"
@@ -958,116 +1282,448 @@ onMounted(() => {
         </button>
       </div>
 
-      <div class="space-y-2 lg:hidden">
-        <article
-          v-for="row in board?.lgas ?? []"
-          :key="row.name"
-          class="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm"
-        >
-          <button
-            type="button"
-            class="flex min-h-14 w-full items-start justify-between gap-3 px-4 py-3 text-left"
-            @click="toggleMatrix(row.name)"
-          >
-            <div class="min-w-0">
-              <p class="font-button-text font-semibold text-on-surface">{{ row.name }}</p>
-              <p class="mt-0.5 text-[11px] text-outline">
-                {{ row.uploaded }}/{{ row.pu_total }} · {{ formatPct(row.progress_pct) }} ·
-                {{ formatNum(row.total_votes) }} votes
-              </p>
-            </div>
-            <span
-              class="mt-0.5 shrink-0 rounded-full px-2 py-0.5 font-label-caps text-[10px] font-bold"
-              :class="
-                row.clean
-                  ? 'bg-action-green/15 text-deep-navy'
-                  : row.uploaded
-                    ? 'bg-secondary-fixed text-on-secondary-fixed'
-                    : 'bg-surface-container-high text-outline'
-              "
-            >
-              {{ row.clean ? "Clean" : row.uploaded ? "Verified" : "Pending" }}
-            </span>
-          </button>
-          <div v-if="expandedMatrix === row.name" class="border-t border-outline-variant/20 px-4 py-3">
-            <div class="flex flex-wrap gap-2">
-              <span
-                v-for="party in topParties(row, standingParties.length)"
-                :key="party.code"
-                class="rounded-lg bg-surface-container-low px-2 py-1 text-[11px]"
-              >
-                <span class="font-bold" :style="{ color: party.color }">{{ party.code }}</span>
-                <span class="ml-1 tabular-nums text-on-surface-variant">{{ formatNum(party.votes) }}</span>
-              </span>
-            </div>
-          </div>
-        </article>
-      </div>
+      <p v-if="matrixLoading || (matrixLevel !== 'lga' && explorerLoading)" class="rounded-2xl bg-surface-container-lowest px-5 py-10 text-center text-sm text-outline shadow-sm">
+        Loading collation…
+      </p>
 
-      <div class="hidden overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm lg:block">
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-left text-xs">
-            <thead>
-              <tr class="border-b border-outline-variant/20 font-label-caps text-[10px] text-outline">
-                <th class="sticky left-0 bg-surface-container-lowest px-4 py-3">LGA</th>
-                <th class="px-3 py-3">Progress</th>
-                <th class="px-3 py-3">Status</th>
-                <th
-                  v-for="party in matrixParties"
-                  :key="party.code"
-                  class="px-2 py-3 text-right"
-                  :style="{ color: party.color }"
+      <!-- Level: LGAs -->
+      <template v-else-if="matrixLevel === 'lga'">
+        <div class="space-y-2 lg:hidden">
+          <article
+            v-for="row in board?.lgas ?? []"
+            :key="row.name"
+            class="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm"
+          >
+            <button
+              type="button"
+              class="flex min-h-14 w-full items-start justify-between gap-3 px-4 py-3 text-left"
+              @click="openMatrixLga(row.name)"
+            >
+              <div class="min-w-0">
+                <p class="font-button-text font-semibold text-on-surface">{{ row.name }}</p>
+                <p class="mt-0.5 text-[11px] text-outline">
+                  {{ row.uploaded }}/{{ row.pu_total }} · {{ formatPct(row.progress_pct) }} ·
+                  {{ formatNum(row.total_votes) }} votes
+                </p>
+              </div>
+              <span class="mt-0.5 inline-flex items-center gap-1 shrink-0 rounded-full bg-action-green/15 px-2 py-0.5 font-label-caps text-[10px] font-bold text-deep-navy">
+                Wards
+                <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+              </span>
+            </button>
+          </article>
+        </div>
+
+        <div class="hidden overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm lg:block">
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-outline-variant/20 font-label-caps text-[10px] text-outline">
+                  <th class="sticky left-0 bg-surface-container-lowest px-4 py-3">LGA</th>
+                  <th class="px-3 py-3">Progress</th>
+                  <th class="px-3 py-3">Status</th>
+                  <th
+                    v-for="party in matrixParties"
+                    :key="party.code"
+                    class="px-2 py-3 text-right"
+                    :style="{ color: party.color }"
+                  >
+                    <div class="inline-flex flex-col items-end gap-1">
+                      <div class="flex items-center gap-1">
+                        <div
+                          class="flex h-5 w-5 items-center justify-center overflow-hidden rounded text-[7px] font-bold text-slate-950"
+                          :style="partyPhotoUrl(party) ? undefined : { background: party.color }"
+                        >
+                          <img
+                            v-if="partyPhotoUrl(party)"
+                            :src="partyPhotoUrl(party)"
+                            :alt="party.name"
+                            class="h-full w-full object-cover"
+                          />
+                          <span v-else>{{ party.code.slice(0, 1) }}</span>
+                        </div>
+                        <div
+                          class="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full text-[7px] font-bold text-slate-950"
+                          :style="{ background: party.color }"
+                        >
+                          <img
+                            v-if="candidatePhotoUrl(party)"
+                            :src="candidatePhotoUrl(party)"
+                            :alt="displayName(party)"
+                            class="h-full w-full object-cover"
+                          />
+                          <span v-else>{{ party.code.slice(0, 1) }}</span>
+                        </div>
+                      </div>
+                      <span>{{ party.code }}</span>
+                    </div>
+                  </th>
+                  <th class="px-4 py-3 text-right text-action-green">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(row, index) in board?.lgas ?? []"
+                  :key="row.name"
+                  class="cursor-pointer border-b border-outline-variant/10 transition hover:bg-action-green/10"
+                  :class="index % 2 ? 'bg-surface-container-low/50' : 'bg-transparent'"
+                  @click="openMatrixLga(row.name)"
                 >
-                  {{ party.code }}
-                </th>
-                <th class="px-4 py-3 text-right text-action-green">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(row, index) in board?.lgas ?? []"
-                :key="row.name"
-                class="border-b border-outline-variant/10"
-                :class="index % 2 ? 'bg-surface-container-low/50' : 'bg-transparent'"
-              >
-                <td
-                  class="sticky left-0 px-4 py-2.5 font-semibold text-on-surface"
-                  :class="index % 2 ? 'bg-surface-container-low/50' : 'bg-surface-container-lowest'"
+                  <td
+                    class="sticky left-0 px-4 py-2.5 font-semibold text-electric-pink"
+                    :class="index % 2 ? 'bg-surface-container-low/50' : 'bg-surface-container-lowest'"
+                  >
+                    <span class="inline-flex items-center gap-1">
+                      {{ row.name }}
+                      <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                    </span>
+                  </td>
+                  <td class="whitespace-nowrap px-3 py-2.5 text-on-surface-variant">
+                    {{ row.uploaded }}/{{ row.pu_total }}
+                  </td>
+                  <td class="px-3 py-2.5">
+                    <span
+                      class="rounded-full px-2 py-0.5 font-label-caps text-[10px] font-bold"
+                      :class="
+                        row.clean
+                          ? 'bg-action-green/15 text-deep-navy'
+                          : row.uploaded
+                            ? 'bg-secondary-fixed text-on-secondary-fixed'
+                            : 'bg-surface-container-high text-outline'
+                      "
+                    >
+                      {{ row.clean ? "Clean" : row.uploaded ? "Verified" : "Pending" }}
+                    </span>
+                  </td>
+                  <td
+                    v-for="party in matrixParties"
+                    :key="`${row.name}-${party.code}`"
+                    class="px-2 py-2.5 text-right tabular-nums text-on-surface-variant"
+                  >
+                    {{ formatNum(row.party_votes[party.code] || 0) }}
+                  </td>
+                  <td class="px-4 py-2.5 text-right font-bold tabular-nums text-primary">
+                    {{ formatNum(row.total_votes) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+
+      <!-- Level: Wards in LGA -->
+      <template v-else-if="matrixLevel === 'ward'">
+        <div class="space-y-2 lg:hidden">
+          <article
+            v-for="row in matrixWardRows"
+            :key="row.name"
+            class="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm"
+          >
+            <button
+              type="button"
+              class="flex min-h-14 w-full items-start justify-between gap-3 px-4 py-3 text-left"
+              @click="openMatrixWard(row.name)"
+            >
+              <div class="min-w-0">
+                <p class="font-button-text font-semibold text-on-surface">{{ row.name }}</p>
+                <p class="mt-0.5 text-[11px] text-outline">
+                  {{ row.uploaded }}/{{ row.pu_total }} · {{ formatPct(row.progress_pct) }} ·
+                  {{ formatNum(row.total_votes) }} votes
+                </p>
+              </div>
+              <span class="mt-0.5 inline-flex items-center gap-1 shrink-0 rounded-full bg-secondary-fixed px-2 py-0.5 font-label-caps text-[10px] font-bold text-on-secondary-fixed">
+                PUs
+                <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+              </span>
+            </button>
+          </article>
+          <p v-if="!matrixWardRows.length" class="rounded-2xl bg-surface-container-lowest px-5 py-10 text-center text-sm text-outline shadow-sm">
+            No wards found for this LGA.
+          </p>
+        </div>
+
+        <div class="hidden overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm lg:block">
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-outline-variant/20 font-label-caps text-[10px] text-outline">
+                  <th class="sticky left-0 bg-surface-container-lowest px-4 py-3">Ward</th>
+                  <th class="px-3 py-3">Progress</th>
+                  <th
+                    v-for="party in matrixParties"
+                    :key="party.code"
+                    class="px-2 py-3 text-right"
+                    :style="{ color: party.color }"
+                  >
+                    <div class="inline-flex flex-col items-end gap-1">
+                      <div class="flex items-center gap-1">
+                        <div
+                          class="flex h-5 w-5 items-center justify-center overflow-hidden rounded text-[7px] font-bold text-slate-950"
+                          :style="partyPhotoUrl(party) ? undefined : { background: party.color }"
+                        >
+                          <img
+                            v-if="partyPhotoUrl(party)"
+                            :src="partyPhotoUrl(party)"
+                            :alt="party.name"
+                            class="h-full w-full object-cover"
+                          />
+                          <span v-else>{{ party.code.slice(0, 1) }}</span>
+                        </div>
+                        <div
+                          class="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full text-[7px] font-bold text-slate-950"
+                          :style="{ background: party.color }"
+                        >
+                          <img
+                            v-if="candidatePhotoUrl(party)"
+                            :src="candidatePhotoUrl(party)"
+                            :alt="displayName(party)"
+                            class="h-full w-full object-cover"
+                          />
+                          <span v-else>{{ party.code.slice(0, 1) }}</span>
+                        </div>
+                      </div>
+                      <span>{{ party.code }}</span>
+                    </div>
+                  </th>
+                  <th class="px-4 py-3 text-right text-action-green">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(row, index) in matrixWardRows"
+                  :key="row.name"
+                  class="cursor-pointer border-b border-outline-variant/10 transition hover:bg-action-green/10"
+                  :class="index % 2 ? 'bg-surface-container-low/50' : 'bg-transparent'"
+                  @click="openMatrixWard(row.name)"
                 >
-                  {{ row.name }}
-                </td>
-                <td class="whitespace-nowrap px-3 py-2.5 text-on-surface-variant">
-                  {{ row.uploaded }}/{{ row.pu_total }}
-                </td>
-                <td class="px-3 py-2.5">
+                  <td
+                    class="sticky left-0 px-4 py-2.5 font-semibold text-electric-pink"
+                    :class="index % 2 ? 'bg-surface-container-low/50' : 'bg-surface-container-lowest'"
+                  >
+                    <span class="inline-flex items-center gap-1">
+                      {{ row.name }}
+                      <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                    </span>
+                  </td>
+                  <td class="whitespace-nowrap px-3 py-2.5 text-on-surface-variant">
+                    {{ row.uploaded }}/{{ row.pu_total }} · {{ formatPct(row.progress_pct) }}
+                  </td>
+                  <td
+                    v-for="party in matrixParties"
+                    :key="`${row.name}-${party.code}`"
+                    class="px-2 py-2.5 text-right tabular-nums text-on-surface-variant"
+                  >
+                    {{ formatNum(row.party_votes[party.code] || 0) }}
+                  </td>
+                  <td class="px-4 py-2.5 text-right font-bold tabular-nums text-primary">
+                    {{ formatNum(row.total_votes) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-if="!matrixWardRows.length" class="px-5 py-10 text-center text-sm text-outline">
+            No wards found for this LGA.
+          </p>
+        </div>
+      </template>
+
+      <!-- Level: Polling units in ward (collation explorer style) -->
+      <template v-else>
+        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+          <div class="space-y-4">
+            <div class="rounded-2xl bg-surface-container-lowest p-5 shadow-sm">
+              <div class="flex flex-wrap gap-2 overflow-x-auto pb-1">
+                <button
+                  v-for="ward in explorer?.wards ?? []"
+                  :key="ward.name"
+                  type="button"
+                  class="shrink-0 rounded-xl px-3 py-2 font-button-text text-xs font-semibold transition"
+                  :class="
+                    selectedWard === ward.name
+                      ? 'bg-primary text-pure-white'
+                      : 'bg-surface-container-low text-primary hover:bg-surface-container'
+                  "
+                  @click="openMatrixWard(ward.name)"
+                >
+                  {{ ward.name }}
+                  <span class="ml-1 opacity-70">{{ formatPct(ward.progress_pct) }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm">
+              <div class="flex flex-col gap-3 border-b border-outline-variant/20 px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                  <h3 class="truncate font-headline-md text-lg font-bold text-primary">
+                    {{ selectedWard || "Select a ward" }}
+                  </h3>
+                  <p class="text-[11px] text-outline">
+                    {{ selectedWardMeta?.uploaded ?? 0 }}/{{ selectedWardMeta?.pu_total ?? 0 }} uploaded
+                  </p>
+                </div>
+                <div class="relative w-full sm:max-w-[12rem]">
+                  <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline">
+                    search
+                  </span>
+                  <input
+                    v-model="puQuery"
+                    type="search"
+                    placeholder="Search PU"
+                    class="h-11 w-full rounded-xl border-0 bg-surface-container-low pl-10 pr-3 font-body-md text-sm text-on-surface outline-none ring-1 ring-outline-variant/30 focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
+              <div class="lg:max-h-[58vh] lg:overflow-y-auto lg:overscroll-contain">
+                <button
+                  v-for="unit in wardUnits"
+                  :key="unit.code"
+                  type="button"
+                  class="flex min-h-14 w-full items-center justify-between gap-3 border-b border-outline-variant/15 px-4 py-3 text-left transition"
+                  :class="selectedUnit?.code === unit.code ? 'bg-action-green/10' : 'hover:bg-surface-container-low'"
+                  @click="selectUnit(unit.code)"
+                >
+                  <div class="min-w-0">
+                    <p class="truncate font-button-text text-sm font-semibold text-on-surface">{{ unit.name }}</p>
+                    <p class="text-[11px] text-outline">{{ unit.code }}</p>
+                  </div>
                   <span
-                    class="rounded-full px-2 py-0.5 font-label-caps text-[10px] font-bold"
+                    class="shrink-0 rounded-full px-2 py-0.5 font-label-caps text-[10px] font-bold"
                     :class="
-                      row.clean
+                      unit.uploaded
                         ? 'bg-action-green/15 text-deep-navy'
-                        : row.uploaded
-                          ? 'bg-secondary-fixed text-on-secondary-fixed'
-                          : 'bg-surface-container-high text-outline'
+                        : 'bg-surface-container-high text-outline'
                     "
                   >
-                    {{ row.clean ? "Clean" : row.uploaded ? "Verified" : "Pending" }}
+                    {{ unit.uploaded ? "Uploaded" : "Pending" }}
                   </span>
-                </td>
-                <td
-                  v-for="party in matrixParties"
-                  :key="`${row.name}-${party.code}`"
-                  class="px-2 py-2.5 text-right tabular-nums text-on-surface-variant"
+                </button>
+                <p v-if="!wardUnits.length" class="px-4 py-8 text-center text-sm text-outline">
+                  No polling units in this ward.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <aside class="audit-sheet" :class="sheetOpen ? 'audit-sheet-open' : ''">
+            <div class="audit-sheet-backdrop lg:hidden" @click="closeSheet" />
+            <div class="audit-sheet-panel overflow-hidden rounded-2xl bg-surface-container-lowest shadow-sm">
+              <div class="flex items-start justify-between gap-3 border-b border-outline-variant/20 px-4 py-4">
+                <div class="min-w-0">
+                  <p class="truncate font-button-text text-sm font-semibold text-on-surface">
+                    {{ selectedUnit?.name || "Select a polling unit" }}
+                  </p>
+                  <p class="truncate text-[11px] text-outline">
+                    {{ selectedUnit?.code || "—" }} · {{ selectedWard || "—" }} · {{ selectedLga }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="rounded-full p-2 text-outline transition hover:bg-surface-container lg:hidden"
+                  aria-label="Close"
+                  @click="closeSheet"
                 >
-                  {{ formatNum(row.party_votes[party.code] || 0) }}
-                </td>
-                <td class="px-4 py-2.5 text-right font-bold tabular-nums text-primary">
-                  {{ formatNum(row.total_votes) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                  <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+              </div>
+              <div class="relative flex h-48 items-center justify-center overflow-hidden bg-surface-container sm:h-56">
+                <img
+                  v-if="photoSrc(selectedUnit)"
+                  :src="photoSrc(selectedUnit)"
+                  alt="EC8A result sheet"
+                  class="max-h-full max-w-full object-contain transition-transform"
+                  :style="{ transform: `scale(${zoom})` }"
+                />
+                <p v-else class="px-6 text-center text-xs text-outline">No EC8A image uploaded for this unit yet.</p>
+                <div class="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
+                  <button
+                    type="button"
+                    class="min-w-[2.1rem] rounded-full bg-surface-container-lowest px-2.5 py-1 text-xs font-semibold text-primary shadow-sm"
+                    @click="zoom = Math.max(1, zoom - 0.25)"
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    class="min-w-[2.1rem] rounded-full bg-surface-container-lowest px-2.5 py-1 text-xs font-semibold text-primary shadow-sm"
+                    @click="zoom = Math.min(3, zoom + 0.25)"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-full bg-surface-container-lowest px-2.5 py-1 text-xs font-semibold text-primary shadow-sm disabled:opacity-40"
+                    :disabled="!selectedUnit?.photo_url"
+                    @click="openOriginal(selectedUnit)"
+                  >
+                    Open
+                  </button>
+                </div>
+              </div>
+              <div class="px-4 py-4">
+                <h3 class="font-label-caps text-on-surface-variant">Transcribed results</h3>
+                <div class="mt-3 grid grid-cols-4 gap-2">
+                  <div
+                    v-for="party in transcribedParties"
+                    :key="party.code"
+                    class="rounded-xl bg-surface-container-low px-1 py-2 text-center"
+                  >
+                    <div class="mb-1 flex items-center justify-center gap-1">
+                      <div
+                        class="flex h-6 w-6 items-center justify-center overflow-hidden rounded text-[7px] font-bold text-slate-950"
+                        :style="partyPhotoUrl(party) ? undefined : { background: party.color }"
+                      >
+                        <img
+                          v-if="partyPhotoUrl(party)"
+                          :src="partyPhotoUrl(party)"
+                          :alt="party.name"
+                          class="h-full w-full object-cover"
+                        />
+                        <span v-else>{{ party.code.slice(0, 1) }}</span>
+                      </div>
+                      <div
+                        class="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full text-[7px] font-bold text-slate-950"
+                        :style="{ background: party.color }"
+                      >
+                        <img
+                          v-if="candidatePhotoUrl(party)"
+                          :src="candidatePhotoUrl(party)"
+                          :alt="displayName(party)"
+                          class="h-full w-full object-cover"
+                        />
+                        <span v-else>{{ party.code.slice(0, 1) }}</span>
+                      </div>
+                    </div>
+                    <span class="block text-[10px] font-bold" :style="{ color: party.color }">{{ party.code }}</span>
+                    <span class="mt-1 block text-xs font-semibold tabular-nums text-on-surface">
+                      {{ selectedUnit?.party_votes[party.code] ?? 0 }}
+                    </span>
+                  </div>
+                </div>
+                <div
+                  v-if="verification"
+                  class="mt-3 rounded-xl px-3 py-2 text-[11px] leading-relaxed"
+                  :class="
+                    verification.ok
+                      ? 'bg-action-green/15 text-deep-navy'
+                      : 'bg-secondary-fixed/80 text-on-secondary-fixed'
+                  "
+                >
+                  <span v-if="verification.ok">
+                    Sum matches Box #7 ({{ verification.box7 ?? verification.sum }}) and the bottom box
+                    ({{ verification.bottom }}).
+                  </span>
+                  <span v-else>
+                    Party sum {{ verification.sum }}. Box #7 {{ verification.box7 ?? "—" }}. Bottom box
+                    {{ verification.bottom }}.
+                  </span>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
-      </div>
+      </template>
     </section>
 
     <!-- Mobile bottom nav (standalone page only) -->

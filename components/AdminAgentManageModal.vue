@@ -19,6 +19,9 @@
           <div>
             <h2 class="text-lg font-semibold text-ui-text">{{ agent.name }}</h2>
             <p class="text-sm text-ui-muted">{{ agent.email }}</p>
+            <p class="mt-1 text-xs font-semibold text-violet-600 dark:text-violet-300">
+              {{ agent.rank_label || "Field agent" }}
+            </p>
             <p v-if="agent.state || agent.lga" class="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <span v-if="agent.state">{{ agent.state }}</span>
               <span v-if="agent.state && agent.lga"> · </span>
@@ -122,12 +125,21 @@
 
           <section class="rounded-lg border border-ui-border/40 bg-ui-elevated/30 p-4">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-ui-muted">
-              Turf / polling unit assignment
+              Rank &amp; turf assignment
             </h3>
             <p class="mt-1 text-[11px] text-ui-muted">
-              Agents are assigned by LGA and ward. Polling units are registered under that turf for live feeds.
+              Set supervisor or agent rank and operating LGA / ward.
             </p>
             <div class="mt-3 flex flex-wrap items-end gap-3">
+              <label class="min-w-[160px] flex-1">
+                <span class="text-[10px] uppercase text-ui-muted">Rank</span>
+                <select v-model="editRank" class="ui-input mt-1 text-sm">
+                  <option value="lga_supervisor">LGA Coordinator</option>
+                  <option value="ward_supervisor">Ward Coordinator</option>
+                  <option value="polling_unit_agent">Polling unit agent</option>
+                  <option value="field_agent">Field agent</option>
+                </select>
+              </label>
               <label class="min-w-[140px] flex-1">
                 <span class="text-[10px] uppercase text-ui-muted">State</span>
                 <select
@@ -149,20 +161,24 @@
                   <option v-for="lga in lgas" :key="lga" :value="lga">{{ lga }}</option>
                 </select>
               </label>
-              <label class="min-w-[140px] flex-1">
+              <label v-if="editRank !== 'lga_supervisor'" class="min-w-[140px] flex-1">
                 <span class="text-[10px] uppercase text-ui-muted">Ward</span>
                 <select v-model="editWard" class="ui-input mt-1 text-sm" :disabled="!editLga">
                   <option value="" disabled>Select ward</option>
                   <option v-for="ward in wards" :key="ward" :value="ward">{{ ward }}</option>
                 </select>
               </label>
+              <label v-if="editRank === 'polling_unit_agent'" class="min-w-[140px] flex-1">
+                <span class="text-[10px] uppercase text-ui-muted">PU code</span>
+                <input v-model.trim="editPuCode" type="text" class="ui-input mt-1 text-sm" placeholder="Optional" />
+              </label>
               <button
                 type="button"
                 class="rounded-lg bg-violet-600 px-4 py-2 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-                :disabled="!editState || !editLga || !editWard || saving"
+                :disabled="!editState || !editLga || (editRank !== 'lga_supervisor' && !editWard) || saving"
                 @click="saveAssignment"
               >
-                {{ saving ? "Saving…" : "Save turf assignment" }}
+                {{ saving ? "Saving…" : "Save assignment" }}
               </button>
             </div>
           </section>
@@ -219,9 +235,12 @@ export type AdminAgentDetail = {
   id: string;
   name: string;
   email: string;
+  rank?: string;
+  rank_label?: string;
   lga: string | null;
   ward: string | null;
   state?: string | null;
+  polling_unit_code?: string | null;
   created_at: string;
   data_claim_limit: number;
   data_claims_used: number;
@@ -265,6 +284,8 @@ const emit = defineEmits<{
 const editState = ref("");
 const editLga = ref("");
 const editWard = ref("");
+const editRank = ref("field_agent");
+const editPuCode = ref("");
 const editClaimLimit = ref(1);
 const editAirtimeLimit = ref(1);
 const editCanMessage = ref(false);
@@ -317,6 +338,8 @@ watch(
     editState.value = props.lockedState || agent.state || "";
     editLga.value = agent.lga ?? "";
     editWard.value = agent.ward ?? "";
+    editRank.value = agent.rank || "field_agent";
+    editPuCode.value = agent.polling_unit_code || "";
     editClaimLimit.value = agent.data_claim_limit ?? 1;
     editAirtimeLimit.value = agent.airtime_claim_limit ?? 1;
     editCanMessage.value = !!agent.can_message_voters;
@@ -348,13 +371,22 @@ async function onLgaChange() {
 }
 
 async function saveAssignment() {
-  if (!props.agent || !editLga.value || !editWard.value) return;
+  if (!props.agent || !editLga.value) return;
+  if (editRank.value !== "lga_supervisor" && !editWard.value) return;
   saving.value = true;
   try {
+    const body: Record<string, string> = {
+      lga: editLga.value,
+      rank: editRank.value,
+    };
+    if (editRank.value !== "lga_supervisor") body.ward = editWard.value;
+    if (editRank.value === "polling_unit_agent" && editPuCode.value.trim()) {
+      body.polling_unit_code = editPuCode.value.trim();
+    }
     await $fetch(`${props.apiBase}/admin/agents/${props.agent.id}/assignment`, {
       method: "PATCH",
       headers: props.authHeaders(),
-      body: { lga: editLga.value, ward: editWard.value },
+      body,
     });
     emit("updated");
   } finally {

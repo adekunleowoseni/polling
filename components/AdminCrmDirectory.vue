@@ -10,8 +10,10 @@ import {
 const props = withDefaults(
   defineProps<{
     stateScope?: string;
+    /** voters = exclude field-agent accounts; all = mixed directory */
+    audience?: "voters" | "all";
   }>(),
-  { stateScope: "all" },
+  { stateScope: "all", audience: "voters" },
 );
 
 const emit = defineEmits<{
@@ -20,7 +22,8 @@ const emit = defineEmits<{
   (e: "openAgent", agentId: string): void;
 }>();
 
-const { loadDirectory, createContact, listSmsDispatches, crmError } = useAdminCrm();
+const { loadDirectory, createContact, importVoters, listSmsDispatches, crmError } = useAdminCrm();
+const { selectedOrg } = useAdminOrgContext();
 const { searchQuery, openSmsAnalytics: goToSmsAnalytics } = useAdminShell();
 const { lgas, wards, loadLgas, loadWards } = useOgunGeo();
 const {
@@ -52,6 +55,8 @@ const selected = ref<Set<string>>(new Set());
 
 const showCreate = ref(false);
 const showBroadcast = ref(false);
+const importing = ref(false);
+const importInput = ref<HTMLInputElement | null>(null);
 const recentDispatches = ref<AdminCrmSmsDispatchSummary[]>([]);
 const form = reactive<AdminCrmContactCreate>({
   name: "",
@@ -66,8 +71,12 @@ const form = reactive<AdminCrmContactCreate>({
 const formTag = ref("");
 
 const scopedRows = computed(() => {
-  if (!props.stateScope || props.stateScope === "all") return rows.value;
-  return rows.value.filter((row) => (row.state || "").trim() === props.stateScope);
+  let list = rows.value;
+  if (props.audience === "voters") {
+    list = list.filter((row) => row.source !== "agent" && row.contact_type !== "agent");
+  }
+  if (!props.stateScope || props.stateScope === "all") return list;
+  return list.filter((row) => (row.state || "").trim() === props.stateScope);
 });
 
 const metrics = computed(() => {
@@ -88,7 +97,7 @@ const metrics = computed(() => {
     identified: list.filter((r) => r.support_score >= 62).length,
     persuadable: list.filter((r) => r.support_score >= 40 && r.support_score < 62).length,
     donors: list.filter((r) => isDonor(r)).length,
-    volunteers: list.filter((r) => r.source === "agent" || r.account_type === "member").length,
+    volunteers: list.filter((r) => r.account_type === "member" || r.tags.some((t) => /member|volunteer/i.test(t))).length,
     follow_up: list.filter((r) => r.support_score < 55 || !r.sms_ok).length,
     high_turnout: list.filter((r) => r.support_score > 80).length,
   };
@@ -260,6 +269,13 @@ watch(
 onMounted(async () => {
   await Promise.all([refresh(), loadLgas(), refreshDispatches()]);
 });
+
+watch(
+  () => selectedOrg.value?.id,
+  () => {
+    void refresh();
+  },
+);
 
 async function refreshDispatches() {
   try {
@@ -516,6 +532,61 @@ function openCreate() {
   openMenu.value = "";
 }
 
+function pickImportFile() {
+  importInput.value?.click();
+}
+
+async function onImportFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  importing.value = true;
+  try {
+    const result = await importVoters(file);
+    const parts = [
+      `${result.created} created`,
+      `${result.updated} updated`,
+      result.skipped ? `${result.skipped} skipped` : null,
+    ].filter(Boolean);
+    emit(
+      "message",
+      `Bulk import complete${result.org_name ? ` for ${result.org_name}` : ""}: ${parts.join(", ")}.`,
+    );
+    if (result.errors?.length) {
+      emit("error", result.errors.slice(0, 3).join(" · "));
+    }
+    await refresh();
+  } catch (e: unknown) {
+    emit("error", crmError(e, "Bulk import failed."));
+  } finally {
+    importing.value = false;
+  }
+}
+
+function downloadSampleTemplate() {
+  const headers = ["LGA", "Ward", "Polling Unit", "Voter Name", "Phone Number", "Gender", "DOB-Y", "VIN"];
+  const sample = [
+    "Abeokuta South",
+    "Ake I",
+    "ST. PETERS SCHOOL AKE",
+    "DOE, JANE ADEOLA",
+    "08012345678",
+    "F",
+    "1990",
+    "90F5AF5792502445847",
+  ];
+  const csv = `${headers.join(",")}\n${sample.map((c) => `"${c}"`).join(",")}\n`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "bulk-voters-sample.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+  emit("message", "Downloaded CSV sample (same columns as the Excel template).");
+}
+
 function addFormTag() {
   const tag = formTag.value.trim();
   if (!tag) return;
@@ -596,14 +667,15 @@ function showingLabel() {
           </div>
         </div>
       </div>
-      <div class="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 lg:w-auto lg:shrink-0">
+      <div class="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:shrink-0 lg:grid-cols-4">
         <button
           class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
           type="button"
-          @click="bulkSelectPage"
+          :disabled="importing"
+          @click="pickImportFile"
         >
-          <span class="material-symbols-outlined shrink-0 text-[18px] text-outline">checklist</span>
-          <span class="truncate">Bulk actions</span>
+          <span class="material-symbols-outlined shrink-0 text-[18px] text-outline">upload_file</span>
+          <span class="truncate">{{ importing ? "Importing…" : "Import Excel" }}</span>
         </button>
         <button
           class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
@@ -614,6 +686,14 @@ function showingLabel() {
           <span class="truncate">Export CSV</span>
         </button>
         <button
+          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
+          type="button"
+          @click="downloadSampleTemplate"
+        >
+          <span class="material-symbols-outlined shrink-0 text-[18px] text-outline">description</span>
+          <span class="truncate">Sample CSV</span>
+        </button>
+        <button
           class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-electric-pink px-4 font-button-text text-sm font-semibold text-pure-white shadow-sm shadow-electric-pink/25 transition hover:opacity-95"
           type="button"
           @click="openCreate"
@@ -622,7 +702,20 @@ function showingLabel() {
           <span class="truncate">New supporter</span>
         </button>
       </div>
+      <input
+        ref="importInput"
+        type="file"
+        accept=".xlsx,.xlsm,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+        class="hidden"
+        @change="onImportFile"
+      />
     </header>
+
+    <p v-if="selectedOrg" class="text-xs text-outline">
+      Importing into organization:
+      <span class="font-semibold text-on-surface">{{ selectedOrg.name }}</span>
+      · Columns: LGA, Ward, Polling Unit, Voter Name, Phone Number, Gender, DOB-Y, VIN
+    </p>
 
       <div
         v-if="recentDispatches.length"
@@ -723,7 +816,7 @@ function showingLabel() {
         <div class="mt-3 flex items-center justify-between">
           <div class="flex items-center gap-1.5">
             <span class="h-2 w-2 animate-pulse rounded-full bg-action-green" />
-            <span class="font-label-caps text-label-caps font-semibold text-primary">Agents &amp; members</span>
+            <span class="font-label-caps text-label-caps font-semibold text-primary">Members &amp; volunteers</span>
           </div>
           <span class="font-label-caps text-xs text-outline">{{ metrics.follow_up.toLocaleString() }} follow-up</span>
         </div>

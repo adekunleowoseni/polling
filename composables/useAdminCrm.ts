@@ -31,6 +31,17 @@ export type AdminCrmDirectory = {
   follow_up: number;
   high_turnout: number;
   rows: AdminCrmRow[];
+  org_id?: string | null;
+  org_name?: string | null;
+};
+
+export type AdminVoterImportOut = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+  org_id?: string | null;
+  org_name?: string | null;
 };
 
 export type AdminCrmContactCreate = {
@@ -67,15 +78,36 @@ export type AdminCrmSmsBroadcastOut = {
   send_test: boolean;
 };
 
-export type AdminCrmSmsDispatchSummary = {
+export type AdminCrmCanvassAction = {
   id: string;
+  agent_id: string;
+  agent_name: string;
+  action_type: string;
   title: string;
-  template: string;
-  channel: string;
-  queued: number;
-  credits: number;
-  created_at: string | null;
-  send_test: boolean;
+  description: string | null;
+  status: string;
+  ward: string | null;
+  lga: string | null;
+  meeting_point: string | null;
+  created_at: string;
+  joined_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type AdminCrmCanvassAssignIn = {
+  title: string;
+  description?: string | null;
+  ward?: string | null;
+  lga?: string | null;
+  meeting_point?: string | null;
+  agent_ids: string[];
+};
+
+export type AdminCrmCanvassAssignOut = {
+  created: number;
+  skipped: number;
+  actions: AdminCrmCanvassAction[];
 };
 
 export type AdminCrmSmsCarrierStat = {
@@ -160,11 +192,25 @@ function crmError(e: unknown, fallback: string) {
 
 export function useAdminCrm() {
   const { apiBase, authHeaders } = useAdminAuth();
+  const { orgQuery } = useAdminOrgContext();
 
   async function loadDirectory() {
     return $fetch<AdminCrmDirectory>(`${apiBase}/admin/crm/directory`, {
       headers: authHeaders(),
+      query: orgQuery.value,
       timeout: 15000,
+    });
+  }
+
+  async function importVoters(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    if (orgQuery.value.org_id) body.append("org_id", orgQuery.value.org_id);
+    return $fetch<AdminVoterImportOut>(`${apiBase}/admin/crm/voters/import`, {
+      method: "POST",
+      headers: authHeaders(),
+      body,
+      timeout: 120000,
     });
   }
 
@@ -199,5 +245,32 @@ export function useAdminCrm() {
     });
   }
 
-  return { loadDirectory, createContact, dispatchSms, listSmsDispatches, loadSmsAnalytics, crmError };
+  async function listCanvassActions() {
+    return $fetch<AdminCrmCanvassAction[]>(`${apiBase}/admin/crm/actions`, {
+      headers: authHeaders(),
+      query: { action_type: "canvass" },
+      timeout: 15000,
+    });
+  }
+
+  async function assignCanvassActions(payload: AdminCrmCanvassAssignIn) {
+    return $fetch<AdminCrmCanvassAssignOut>(`${apiBase}/admin/crm/actions`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: payload,
+      timeout: 20000,
+    });
+  }
+
+  return {
+    loadDirectory,
+    importVoters,
+    createContact,
+    dispatchSms,
+    listSmsDispatches,
+    loadSmsAnalytics,
+    listCanvassActions,
+    assignCanvassActions,
+    crmError,
+  };
 }

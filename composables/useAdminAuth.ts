@@ -8,6 +8,7 @@ export type Admin = {
   org_name?: string | null;
   org_role?: string | null;
   allowed_tabs?: string[];
+  impersonating?: boolean;
   created_at: string;
 };
 
@@ -18,6 +19,7 @@ export const STATE_ADMIN_NAV_TABS = [
   "snaps",
   "recordings",
   "agents",
+  "field-agents",
   "sms-analytics",
   "votes",
   "disbursements",
@@ -26,11 +28,13 @@ export const STATE_ADMIN_NAV_TABS = [
   "inbox",
   "audit",
   "parties",
+  "elective-offices",
 ] as const;
 
 export const SUPER_ADMIN_NAV_TABS = [
   ...STATE_ADMIN_NAV_TABS,
   "payment-gateways",
+  "integrations",
   "data",
   "airtime",
   "organizations",
@@ -42,6 +46,7 @@ export const ORG_ADMIN_NAV_TABS = [
   "snaps",
   "recordings",
   "agents",
+  "field-agents",
   "sms-analytics",
   "votes",
   "disbursements",
@@ -49,6 +54,7 @@ export const ORG_ADMIN_NAV_TABS = [
   "inbox",
   "audit",
   "parties",
+  "elective-offices",
   "org-users",
 ] as const;
 
@@ -58,6 +64,7 @@ export const ORG_OPERATOR_NAV_TABS = [
   "snaps",
   "recordings",
   "agents",
+  "field-agents",
   "votes",
   "inbox",
   "audit",
@@ -72,6 +79,9 @@ export type AdminOverview = {
   form_registrations: number;
   total_votes: number;
   units_with_results: number;
+  directory_voters?: number;
+  org_id?: string | null;
+  org_name?: string | null;
   updated_at: string;
 };
 
@@ -151,19 +161,27 @@ export function useAdminAuth() {
 
   function canAccessTab(tabId: string) {
     if (!admin.value) return false;
+    // Prefer server-provided allow-list (covers impersonation + custom roles)
+    if (admin.value.allowed_tabs?.length) {
+      return admin.value.allowed_tabs.includes(tabId);
+    }
     const role = admin.value.role || "super_admin";
-    if (role === "org_owner" || role === "org_admin") {
-      return (ORG_ADMIN_NAV_TABS as readonly string[]).includes(tabId) || !!admin.value.allowed_tabs?.includes(tabId);
+    const fullOrgAdmin =
+      role === "org_owner" ||
+      role === "org_admin" ||
+      role === "director_general" ||
+      role === "campaign_manager";
+    if (fullOrgAdmin) {
+      return (ORG_ADMIN_NAV_TABS as readonly string[]).includes(tabId);
     }
     if (role === "org_operator") {
-      return (ORG_OPERATOR_NAV_TABS as readonly string[]).includes(tabId) || !!admin.value.allowed_tabs?.includes(tabId);
+      return (ORG_OPERATOR_NAV_TABS as readonly string[]).includes(tabId);
     }
     const roleTabs =
       role === "state_admin"
         ? (STATE_ADMIN_NAV_TABS as readonly string[])
         : (SUPER_ADMIN_NAV_TABS as readonly string[]);
-    if (roleTabs.includes(tabId)) return true;
-    return !!admin.value.allowed_tabs?.includes(tabId);
+    return roleTabs.includes(tabId);
   }
 
   function requireAdmin(next = "/admin/dashboard") {
@@ -192,6 +210,7 @@ export function useAdminAuth() {
     requireAdmin,
     isLoggedIn: computed(() => !!token.value),
     isSuperAdmin: computed(() => (admin.value?.role || "super_admin") === "super_admin"),
+    isImpersonating: computed(() => !!admin.value?.impersonating),
     apiBase,
   };
 }

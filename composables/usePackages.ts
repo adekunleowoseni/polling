@@ -2,10 +2,15 @@ export type PackageDistribution = {
   id: string;
   title: string;
   state: string;
+  target_scope?: "all" | "lga" | "ward" | "polling_unit";
   lga: string;
   ward: string;
   polling_unit_code: string | null;
   polling_unit_name: string | null;
+  states?: string[];
+  lgas?: string[];
+  wards?: string[];
+  polling_unit_codes?: string[];
   audience: string;
   package_count: number;
   packages_claimed: number;
@@ -20,10 +25,15 @@ export type PackageDistribution = {
 export type PackageDistributionCreate = {
   title: string;
   state: string;
-  lga: string;
-  ward: string;
+  target_scope?: "all" | "lga" | "ward" | "polling_unit";
+  lga?: string;
+  ward?: string;
   polling_unit_code?: string;
   polling_unit_name?: string;
+  states?: string[];
+  lgas?: string[];
+  wards?: string[];
+  polling_unit_codes?: string[];
   audience?: "voter" | "member" | "both";
   package_count?: number;
   auto_count?: boolean;
