@@ -232,8 +232,11 @@ function crmError(e: unknown, fallback: string) {
     const detail = err.data?.detail;
     if (typeof detail === "string") return detail;
     if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
-    if (typeof err.message === "string" && /timeout/i.test(err.message)) {
-      return "Directory timed out. Check the API connection and try again.";
+    if (typeof err.message === "string" && /timeout|aborted/i.test(err.message)) {
+      return `${fallback} The server took too long to respond — check the API connection and try again.`;
+    }
+    if (typeof err.message === "string" && /no response|NetworkError|Failed to fetch|Load failed/i.test(err.message)) {
+      return `${fallback} The connection to the server was lost (network drop or the API restarting) — wait a moment and try again.`;
     }
   }
   return e instanceof Error ? e.message : fallback;
@@ -263,7 +266,8 @@ export function useAdminCrm() {
       method: "POST",
       headers: authHeaders(),
       body,
-      timeout: 120000,
+      // Large registers take a while to upload over mobile data and to process server-side.
+      timeout: 600000,
     });
   }
 
