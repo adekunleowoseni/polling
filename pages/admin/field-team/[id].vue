@@ -377,12 +377,28 @@ useHead(() => ({ title: me.value ? `${me.value.name} · Field team` : "Field tea
         </div>
       </section>
 
-      <section v-else-if="isCoordinator && ws.reports.length" class="rounded-xl bg-surface-container-lowest p-5 shadow-sm">
-        <h2 class="font-semibold text-primary">Full team tree</h2>
-        <p class="mt-1 text-xs text-outline">Voters are assigned to field agents; open a field agent to manage their voters.</p>
-        <div class="mt-3">
-          <AdminFieldTeamTree :nodes="ws.reports" :expand-depth="1" />
-        </div>
+      <template v-else-if="isCoordinator">
+        <section v-if="ws.reports.length" class="rounded-xl bg-surface-container-lowest p-5 shadow-sm">
+          <h2 class="font-semibold text-primary">Full team tree</h2>
+          <p class="mt-1 text-xs text-outline">
+            Voters are held by polling unit agents. Click anyone's voter count to see their voters.
+          </p>
+          <div class="mt-3">
+            <AdminFieldTeamTree :nodes="ws.reports" :expand-depth="1" />
+          </div>
+        </section>
+        <section class="rounded-xl bg-surface-container-lowest p-5 shadow-sm">
+          <h2 class="font-semibold text-primary">All voters in {{ me.name }}'s team ({{ me.totals.voters.toLocaleString() }})</h2>
+          <p class="mt-1 text-xs text-outline">Every voter assigned to a polling unit agent under this coordinator.</p>
+          <div class="mt-3">
+            <AdminFieldTeamVoterList :agent-id="me.id!" />
+          </div>
+        </section>
+      </template>
+
+      <section v-else class="rounded-xl bg-surface-container-lowest p-5 text-sm text-outline shadow-sm">
+        Voters are assigned to <strong>polling unit agents</strong> only. To give {{ me.name }} voters, change their rank to
+        Polling unit agent under <em>Details, turf &amp; claims</em>.
       </section>
     </template>
 

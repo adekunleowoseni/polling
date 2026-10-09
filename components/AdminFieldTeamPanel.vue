@@ -22,7 +22,7 @@ const cards = computed(() => {
   return [
     { label: "LGA Coordinators", value: t.lga_coordinators, icon: "account_balance", hint: "Top of the hierarchy" },
     { label: "Ward Coordinators", value: t.totals.ward_coordinators, icon: "holiday_village", hint: "Report to an LGA Coordinator" },
-    { label: "Field agents", value: t.totals.field_agents, icon: "directions_walk", hint: "Field & polling unit agents" },
+    { label: "Agents", value: t.totals.field_agents, icon: "directions_walk", hint: "Polling unit & field agents" },
     {
       label: "Voters assigned",
       value: t.voters_assigned,
@@ -56,8 +56,9 @@ watch(() => selectedOrg.value?.id, () => void refresh());
           Team hierarchy
         </h2>
         <p class="mt-1 max-w-2xl text-xs text-outline">
-          LGA Coordinator → Ward Coordinator → Field agent → voters. Counts roll up: a coordinator's voters include
-          everyone in their team. Open any person to assign their team or voters.
+          LGA Coordinator → Ward Coordinator → Polling unit agent → voters. Counts roll up: a coordinator's voters
+          include everyone in their team. Click a voter count to see the voters (name, VIN, phone); open a person to
+          assign their team or voters.
         </p>
       </div>
       <div class="flex gap-2">

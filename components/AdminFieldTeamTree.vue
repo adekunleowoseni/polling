@@ -14,6 +14,15 @@ const props = withDefaults(
 );
 
 const expanded = ref<Set<string>>(new Set());
+/** Nodes whose voter list is open */
+const votersOpen = ref<Set<string>>(new Set());
+
+function toggleVoters(id: string) {
+  const next = new Set(votersOpen.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  votersOpen.value = next;
+}
 const collapsed = ref<Set<string>>(new Set());
 
 function key(node: FieldTeamNode, index: number) {
@@ -119,10 +128,19 @@ function rankTone(rank: string) {
           >
             {{ node.totals.field_agents.toLocaleString() }} agents
           </span>
-          <span
-            class="rounded-full bg-deep-navy/5 px-2 py-0.5 font-bold text-primary"
-            :title="`Voters assigned to ${node.name}${node.children.length ? ' and their team' : ''}`"
+          <button
+            v-if="node.id"
+            type="button"
+            class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-bold transition-colors"
+            :class="votersOpen.has(node.id) ? 'bg-deep-navy text-pure-white' : 'bg-deep-navy/5 text-primary hover:bg-deep-navy/10'"
+            :aria-expanded="votersOpen.has(node.id)"
+            :title="`Show the voters assigned to ${node.name}${node.children.length ? ' and their team' : ''}`"
+            @click="toggleVoters(node.id)"
           >
+            <span class="material-symbols-outlined text-[14px]">{{ votersOpen.has(node.id) ? "expand_less" : "groups" }}</span>
+            {{ node.totals.voters.toLocaleString() }} voters
+          </button>
+          <span v-else class="rounded-full bg-deep-navy/5 px-2 py-0.5 font-bold text-primary">
             {{ node.totals.voters.toLocaleString() }} voters
           </span>
           <span
@@ -133,6 +151,9 @@ function rankTone(rank: string) {
             {{ node.totals.contacts.toLocaleString() }} added
           </span>
         </div>
+      </div>
+      <div v-if="node.id && votersOpen.has(node.id)" class="mb-2 ml-9 mt-1">
+        <AdminFieldTeamVoterList :agent-id="node.id" :show-agent="node.rank !== 'polling_unit_agent'" />
       </div>
       <AdminFieldTeamTree
         v-if="node.children.length && isOpen(node, index)"

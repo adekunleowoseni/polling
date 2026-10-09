@@ -54,6 +54,29 @@ export type FieldTeamVoterFilter = {
   phone?: string;
 };
 
+export type FieldTeamVoter = {
+  id: string;
+  name: string;
+  vin: string | null;
+  phone: string | null;
+  gender: string | null;
+  polling_unit: string | null;
+  ward: string | null;
+  lga: string | null;
+  assigned_agent_id: string | null;
+  assigned_agent_name: string | null;
+};
+
+export type FieldTeamVoters = {
+  total: number;
+  page: number;
+  page_size: number;
+  /** Whose branch these voters belong to */
+  scope_name: string;
+  agents_in_scope: number;
+  rows: FieldTeamVoter[];
+};
+
 export type FieldTeamAssignResult = { matched: number; changed: number; agent_voters: number };
 
 export function fieldTeamPath(agentId: string) {
@@ -118,5 +141,15 @@ export function useFieldTeam() {
     });
   }
 
-  return { tree, treeLoading, loadTree, loadAgent, setSupervisor, setReports, assignVoters };
+  /** The actual voters behind a node's count: the person and everyone under them. */
+  function loadTeamVoters(agentId: string, params: { member_id?: string; q?: string; page?: number; page_size?: number } = {}) {
+    const query: Record<string, string | number> = {};
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") query[k] = v;
+    return $fetch<FieldTeamVoters>(`${apiBase}/admin/field-team/agents/${agentId}/team-voters`, {
+      headers: authHeaders(),
+      query,
+    });
+  }
+
+  return { tree, treeLoading, loadTree, loadAgent, setSupervisor, setReports, assignVoters, loadTeamVoters };
 }
