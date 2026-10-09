@@ -22,7 +22,16 @@ const emit = defineEmits<{
   (e: "openAgent", agentId: string): void;
 }>();
 
-const { loadDirectory, createContact, importVoters, listSmsDispatches, crmError } = useAdminCrm();
+const {
+  loadDirectory,
+  createContact,
+  importVoters,
+  deleteContact,
+  deleteContacts,
+  deleteAllContacts,
+  listSmsDispatches,
+  crmError,
+} = useAdminCrm();
 const { selectedOrg } = useAdminOrgContext();
 const { searchQuery, openSmsAnalytics: goToSmsAnalytics } = useAdminShell();
 const { lgas, wards, loadLgas, loadWards } = useOgunGeo();
@@ -58,6 +67,10 @@ const showBroadcast = ref(false);
 const importing = ref(false);
 const importInput = ref<HTMLInputElement | null>(null);
 const recentDispatches = ref<AdminCrmSmsDispatchSummary[]>([]);
+const deleting = ref(false);
+const pendingDelete = ref<null | { mode: "one"; row: AdminCrmRow } | { mode: "selected" } | { mode: "all" }>(null);
+const deleteAllConfirmText = ref("");
+const deleteAllImportsOnly = ref(false);
 const form = reactive<AdminCrmContactCreate>({
   name: "",
   phone: "",
@@ -394,6 +407,10 @@ function deselectAll() {
   selected.value = new Set();
 }
 
+function selectAllFiltered() {
+  selected.value = new Set(filteredRows.value.map((row) => row.id));
+}
+
 function bulkSelectPage() {
   if (!selectedCount.value) toggleSelectPage();
 }
@@ -554,7 +571,8 @@ async function onImportFile(event: Event) {
       `Bulk import complete${result.org_name ? ` for ${result.org_name}` : ""}: ${parts.join(", ")}.`,
     );
     if (result.errors?.length) {
-      emit("error", result.errors.slice(0, 3).join(" · "));
+      const more = result.errors.length > 3 ? ` (+${result.errors.length - 3} more)` : "";
+      emit("error", `${result.errors.slice(0, 3).join(" · ")}${more}`);
     }
     await refresh();
   } catch (e: unknown) {
@@ -585,6 +603,82 @@ function downloadSampleTemplate() {
   a.click();
   URL.revokeObjectURL(url);
   emit("message", "Downloaded CSV sample (same columns as the Excel template).");
+}
+
+const deletableSelected = computed(() => selectedRows.value.filter((row) => !isAgentRow(row)));
+
+const deleteDialogTitle = computed(() => {
+  const pending = pendingDelete.value;
+  if (!pending) return "";
+  if (pending.mode === "one") return `Delete ${pending.row.name}?`;
+  if (pending.mode === "selected") {
+    const n = deletableSelected.value.length;
+    return `Delete ${n.toLocaleString()} selected contact${n === 1 ? "" : "s"}?`;
+  }
+  return deleteAllImportsOnly.value ? "Delete all bulk-imported voters?" : "Delete all voters & contacts?";
+});
+
+const deleteAllReady = computed(() => deleteAllConfirmText.value.trim().toUpperCase() === "DELETE");
+
+function askDeleteRow(row: AdminCrmRow) {
+  rowMenuId.value = null;
+  openMenu.value = "";
+  if (isAgentRow(row)) {
+    emit("error", "Field agents are removed from Agent Management, not the voter directory.");
+    return;
+  }
+  pendingDelete.value = { mode: "one", row };
+}
+
+function askDeleteSelected() {
+  if (!deletableSelected.value.length) {
+    emit("error", "No deletable voters in the selection (field agents are managed separately).");
+    return;
+  }
+  pendingDelete.value = { mode: "selected" };
+}
+
+function askDeleteAll() {
+  openMenu.value = "";
+  deleteAllConfirmText.value = "";
+  deleteAllImportsOnly.value = false;
+  pendingDelete.value = { mode: "all" };
+}
+
+function closeDeleteDialog() {
+  if (deleting.value) return;
+  pendingDelete.value = null;
+}
+
+async function confirmDelete() {
+  const pending = pendingDelete.value;
+  if (!pending) return;
+  if (pending.mode === "all" && !deleteAllReady.value) return;
+  deleting.value = true;
+  try {
+    let result;
+    if (pending.mode === "one") {
+      result = await deleteContact(pending.row.id);
+    } else if (pending.mode === "selected") {
+      result = await deleteContacts(deletableSelected.value.map((row) => row.id));
+    } else {
+      result = await deleteAllContacts({ bulkImportOnly: deleteAllImportsOnly.value });
+    }
+    pendingDelete.value = null;
+    if (pending.mode !== "one") deselectAll();
+    emit(
+      "message",
+      pending.mode === "one"
+        ? `${pending.row.name} deleted from the directory.`
+        : `Deleted ${result.deleted.toLocaleString()} contact(s)${result.skipped ? `, ${result.skipped} skipped` : ""}.`,
+    );
+    if (result.errors?.length) emit("error", result.errors.slice(0, 3).join(" · "));
+    await refresh();
+  } catch (e: unknown) {
+    emit("error", crmError(e, "Could not delete contact(s)."));
+  } finally {
+    deleting.value = false;
+  }
 }
 
 function addFormTag() {
@@ -667,7 +761,7 @@ function showingLabel() {
           </div>
         </div>
       </div>
-      <div class="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:shrink-0 lg:grid-cols-4">
+      <div class="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:shrink-0 lg:grid-cols-5">
         <button
           class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
           type="button"
@@ -701,11 +795,20 @@ function showingLabel() {
           <span class="material-symbols-outlined shrink-0 text-[18px]">person_add</span>
           <span class="truncate">New supporter</span>
         </button>
+        <button
+          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-error-container px-4 font-button-text text-sm font-semibold text-error shadow-sm transition hover:opacity-90 disabled:opacity-50"
+          type="button"
+          :disabled="deleting || loading"
+          @click="askDeleteAll"
+        >
+          <span class="material-symbols-outlined shrink-0 text-[18px]">delete_sweep</span>
+          <span class="truncate">Delete all</span>
+        </button>
       </div>
       <input
         ref="importInput"
         type="file"
-        accept=".xlsx,.xlsm,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+        accept=".xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
         class="hidden"
         @change="onImportFile"
       />
@@ -1154,6 +1257,16 @@ function showingLabel() {
                     <span class="material-symbols-outlined text-[18px]">person_pin</span>
                   </button>
                   <button
+                    v-if="!isAgentRow(row)"
+                    class="inline-flex h-8 items-center justify-center rounded-lg bg-surface-container px-2.5 text-error transition hover:bg-error-container"
+                    title="Delete voter"
+                    type="button"
+                    :disabled="deleting"
+                    @click="askDeleteRow(row)"
+                  >
+                    <span class="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
+                  <button
                     class="inline-flex h-8 items-center justify-center rounded-lg bg-surface-container px-2.5 text-primary transition hover:bg-surface-container-high"
                     title="More Options"
                     type="button"
@@ -1185,6 +1298,14 @@ function showingLabel() {
             <span class="font-label-caps text-xs font-bold text-pure-white">{{ selectedCount }} Contact{{ selectedCount === 1 ? "" : "s" }} Selected</span>
           </div>
           <span class="hidden text-xs text-on-primary-container sm:inline">| Ready for operational batch dispatch</span>
+          <button
+            v-if="selectedCount < filteredRows.length"
+            class="font-label-caps text-xs font-bold text-electric-pink underline-offset-2 hover:underline"
+            type="button"
+            @click="selectAllFiltered"
+          >
+            Select all {{ filteredRows.length.toLocaleString() }} in filter
+          </button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button
@@ -1210,6 +1331,15 @@ function showingLabel() {
           >
             <span class="material-symbols-outlined text-[16px]">download</span>
             <span>Export list</span>
+          </button>
+          <button
+            class="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-error px-3 font-button-text text-xs font-semibold text-pure-white transition hover:opacity-90 disabled:opacity-50"
+            type="button"
+            :disabled="deleting"
+            @click="askDeleteSelected"
+          >
+            <span class="material-symbols-outlined text-[16px]">delete</span>
+            <span>Delete selected</span>
           </button>
           <button
             class="inline-flex h-8 items-center justify-center rounded-lg bg-pure-white/10 px-3 font-button-text text-xs font-semibold text-on-primary-container transition hover:bg-pure-white/20 hover:text-pure-white"
@@ -1274,6 +1404,61 @@ function showingLabel() {
       @message="(msg: string) => emit('message', msg)"
       @dispatched="onBroadcastDispatched"
     />
+
+    <div v-if="pendingDelete" class="fixed inset-0 z-[60] flex items-center justify-center bg-deep-navy/50 p-4" @click.self="closeDeleteDialog">
+      <div class="w-full max-w-md rounded-2xl bg-surface-container-lowest p-6 shadow-xl" role="alertdialog" aria-modal="true">
+        <div class="flex items-start gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-error-container text-error">
+            <span class="material-symbols-outlined text-[20px]">delete_forever</span>
+          </div>
+          <div class="min-w-0">
+            <h2 class="font-headline-md text-lg font-bold text-primary">{{ deleteDialogTitle }}</h2>
+            <p v-if="pendingDelete.mode === 'one'" class="mt-1 text-xs text-outline">
+              {{ contactRef(pendingDelete.row) }} · {{ precinctLabel(pendingDelete.row) || "Unassigned precinct" }}.
+              This permanently removes the record and cannot be undone.
+            </p>
+            <p v-else-if="pendingDelete.mode === 'selected'" class="mt-1 text-xs text-outline">
+              The selected voters and contacts will be permanently removed.
+              <template v-if="deletableSelected.length < selectedCount">
+                {{ selectedCount - deletableSelected.length }} field agent(s) in the selection will be kept.
+              </template>
+            </p>
+            <p v-else class="mt-1 text-xs text-outline">
+              Permanently removes every voter{{ deleteAllImportsOnly ? " created by bulk import" : " and CRM contact" }}
+              in <span class="font-semibold text-on-surface">{{ selectedOrg?.name || "this organization" }}</span>
+              — including ones not loaded on this page. Field agents are not affected.
+            </p>
+          </div>
+        </div>
+        <div v-if="pendingDelete.mode === 'all'" class="mt-4 flex flex-col gap-3">
+          <label class="flex items-center gap-2 text-xs text-on-surface">
+            <input v-model="deleteAllImportsOnly" class="rounded" type="checkbox" />
+            Only bulk-imported voters (keep app sign-ups and CRM contacts)
+          </label>
+          <label>
+            <span class="font-label-caps text-[11px] uppercase text-outline">Type DELETE to confirm</span>
+            <input
+              v-model="deleteAllConfirmText"
+              class="mt-1 w-full rounded-xl bg-off-white px-3 py-2 text-sm text-on-surface focus:outline-none"
+              type="text"
+              autocomplete="off"
+              @keydown.enter.prevent="confirmDelete"
+            />
+          </label>
+        </div>
+        <div class="mt-5 flex justify-end gap-2">
+          <button class="rounded-xl bg-surface-container-low px-4 py-2 text-sm text-primary" type="button" :disabled="deleting" @click="closeDeleteDialog">Cancel</button>
+          <button
+            class="rounded-xl bg-error px-4 py-2 text-sm font-semibold text-pure-white disabled:opacity-50"
+            type="button"
+            :disabled="deleting || (pendingDelete.mode === 'all' && !deleteAllReady)"
+            @click="confirmDelete"
+          >
+            {{ deleting ? "Deleting…" : "Delete" }}
+          </button>
+        </div>
+      </div>
+    </div>
 
     <div v-if="showCreate" class="fixed inset-0 z-[60] flex items-center justify-center bg-deep-navy/50 p-4" @click.self="showCreate = false">
       <div class="w-full max-w-lg rounded-2xl bg-surface-container-lowest p-6 shadow-xl">

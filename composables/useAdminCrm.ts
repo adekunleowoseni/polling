@@ -44,6 +44,14 @@ export type AdminVoterImportOut = {
   org_name?: string | null;
 };
 
+export type AdminCrmDeleteOut = {
+  deleted: number;
+  voters: number;
+  contacts: number;
+  skipped: number;
+  errors: string[];
+};
+
 export type AdminCrmContactCreate = {
   name: string;
   phone?: string | null;
@@ -222,6 +230,35 @@ export function useAdminCrm() {
     });
   }
 
+  async function deleteContact(contactId: string) {
+    return $fetch<AdminCrmDeleteOut>(`${apiBase}/admin/crm/contacts/${encodeURIComponent(contactId)}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+  }
+
+  async function deleteContacts(contactIds: string[]) {
+    return $fetch<AdminCrmDeleteOut>(`${apiBase}/admin/crm/contacts/bulk-delete`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: { contact_ids: contactIds },
+      timeout: 60000,
+    });
+  }
+
+  async function deleteAllContacts(options: { bulkImportOnly?: boolean } = {}) {
+    return $fetch<AdminCrmDeleteOut>(`${apiBase}/admin/crm/contacts/bulk-delete`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: {
+        all: true,
+        bulk_import_only: Boolean(options.bulkImportOnly),
+        org_id: orgQuery.value.org_id || null,
+      },
+      timeout: 120000,
+    });
+  }
+
   async function dispatchSms(payload: AdminCrmSmsBroadcastIn) {
     return $fetch<AdminCrmSmsBroadcastOut>(`${apiBase}/admin/crm/sms-broadcast`, {
       method: "POST",
@@ -266,6 +303,9 @@ export function useAdminCrm() {
     loadDirectory,
     importVoters,
     createContact,
+    deleteContact,
+    deleteContacts,
+    deleteAllContacts,
     dispatchSms,
     listSmsDispatches,
     loadSmsAnalytics,
