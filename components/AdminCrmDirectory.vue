@@ -3,6 +3,7 @@ import {
   useAdminCrm,
   type AdminCrmContactCreate,
   type AdminCrmDirectory,
+  type AdminCrmDirectoryQuery,
   type AdminCrmRow,
   type AdminCrmSmsDispatchSummary,
 } from "~/composables/useAdminCrm";
@@ -60,7 +61,10 @@ const rowMenuId = ref<string | null>(null);
 
 const page = ref(1);
 const pageSize = ref(25);
-const selected = ref<Set<string>>(new Set());
+// Selected rows keyed by id, kept across pages so batch actions work on everything ticked.
+const selected = ref<Map<string, AdminCrmRow>>(new Map());
+const fetching = ref(false);
+let requestSeq = 0;
 
 const showCreate = ref(false);
 const showBroadcast = ref(false);
@@ -83,106 +87,42 @@ const form = reactive<AdminCrmContactCreate>({
 });
 const formTag = ref("");
 
-const scopedRows = computed(() => {
-  let list = rows.value;
-  if (props.audience === "voters") {
-    list = list.filter((row) => row.source !== "agent" && row.contact_type !== "agent");
-  }
-  if (!props.stateScope || props.stateScope === "all") return list;
-  return list.filter((row) => (row.state || "").trim() === props.stateScope);
-});
+const emptyMetrics = {
+  total: 0,
+  identified: 0,
+  persuadable: 0,
+  donors: 0,
+  volunteers: 0,
+  follow_up: 0,
+  high_turnout: 0,
+};
 
+// Metrics, filter options, clusters and the matrix all come from the server, computed over
+// the full scoped directory — the browser only ever holds one page of rows.
 const metrics = computed(() => {
-  const list = scopedRows.value;
-  if (!list.length && directory.value && props.stateScope === "all") {
-    return {
-      total: directory.value.total,
-      identified: directory.value.identified,
-      persuadable: directory.value.persuadable,
-      donors: directory.value.donors,
-      volunteers: directory.value.volunteers,
-      follow_up: directory.value.follow_up,
-      high_turnout: directory.value.high_turnout,
-    };
-  }
+  const d = directory.value;
+  if (!d) return emptyMetrics;
   return {
-    total: list.length,
-    identified: list.filter((r) => r.support_score >= 62).length,
-    persuadable: list.filter((r) => r.support_score >= 40 && r.support_score < 62).length,
-    donors: list.filter((r) => isDonor(r)).length,
-    volunteers: list.filter((r) => r.account_type === "member" || r.tags.some((t) => /member|volunteer/i.test(t))).length,
-    follow_up: list.filter((r) => r.support_score < 55 || !r.sms_ok).length,
-    high_turnout: list.filter((r) => r.support_score > 80).length,
+    total: d.total,
+    identified: d.identified,
+    persuadable: d.persuadable,
+    donors: d.donors,
+    volunteers: d.volunteers,
+    follow_up: d.follow_up,
+    high_turnout: d.high_turnout,
   };
 });
 
-const precinctOptions = computed(() => {
-  const set = new Set<string>();
-  for (const row of scopedRows.value) {
-    const label = precinctLabel(row);
-    if (label) set.add(label);
-  }
-  return [...set].sort((a, b) => a.localeCompare(b));
-});
+const precinctOptions = computed(() => directory.value?.precinct_options ?? []);
+const tagOptions = computed(() => directory.value?.tag_options ?? []);
+const filteredTotal = computed(() => directory.value?.filtered_total ?? 0);
+const verifiedInView = computed(() => directory.value?.verified_in_view ?? 0);
+const mapClusters = computed(() => directory.value?.clusters ?? []);
+const matrixGroups = computed(() => directory.value?.matrix ?? []);
 
-const tagOptions = computed(() => {
-  const set = new Set<string>();
-  for (const row of scopedRows.value) {
-    for (const tag of row.tags) if (tag) set.add(tag);
-  }
-  return [...set].sort((a, b) => a.localeCompare(b));
-});
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredTotal.value / pageSize.value)));
 
-const filteredRows = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  return scopedRows.value.filter((row) => {
-    if (segment.value === "turnout" && row.support_score <= 80) return false;
-    if (segment.value === "undecided" && (row.support_score < 40 || row.support_score >= 62) && !row.tags.some((t) => t.toLowerCase().includes("undecided"))) {
-      return false;
-    }
-    if (segment.value === "donors" && !isDonor(row)) return false;
-    if (segment.value === "followup" && row.support_score >= 55 && row.sms_ok) return false;
-    if (precinct.value && precinctLabel(row) !== precinct.value) return false;
-    if (scoreBand.value === "strong" && row.support_score < 75) return false;
-    if (scoreBand.value === "persuadable" && (row.support_score < 40 || row.support_score >= 62)) return false;
-    if (scoreBand.value === "oppose" && row.support_score >= 40) return false;
-    if (tagFilter.value && !row.tags.includes(tagFilter.value)) return false;
-    if (lastContact.value !== "all" && !matchesLastContact(row, lastContact.value)) return false;
-    if (!q) return true;
-    const hay = [
-      row.name,
-      row.email,
-      row.phone,
-      row.id,
-      row.lga,
-      row.ward,
-      row.address,
-      row.polling_unit,
-      row.tags.join(" "),
-      contactRef(row),
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
-  });
-});
-
-const verifiedInView = computed(
-  () =>
-    filteredRows.value.filter(
-      (row) =>
-        row.kyc_status === "verified" ||
-        row.tags.some((t) => /kyc|pvc/i.test(t)),
-    ).length,
-);
-
-const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)));
-
-const pagedRows = computed(() => {
-  const start = (page.value - 1) * pageSize.value;
-  return filteredRows.value.slice(start, start + pageSize.value);
-});
+const pagedRows = computed(() => rows.value);
 
 const pageNumbers = computed(() => {
   const last = pageCount.value;
@@ -192,7 +132,7 @@ const pageNumbers = computed(() => {
 });
 
 const selectedCount = computed(() => selected.value.size);
-const selectedRows = computed(() => filteredRows.value.filter((row) => selected.value.has(row.id)));
+const selectedRows = computed(() => [...selected.value.values()]);
 const allPageSelected = computed(
   () => pagedRows.value.length > 0 && pagedRows.value.every((row) => selected.value.has(row.id)),
 );
@@ -209,42 +149,51 @@ const persuadableShare = computed(() => {
   return `${((metrics.value.persuadable / total) * 100).toFixed(1)}% of total`;
 });
 
-const mapClusters = computed(() => {
-  const map = new Map<string, { label: string; count: number; strong: number }>();
-  for (const row of filteredRows.value) {
-    const label = row.lga || row.state || "Unassigned";
-    const cur = map.get(label) || { label, count: 0, strong: 0 };
-    cur.count += 1;
-    if (row.support_score >= 62) cur.strong += 1;
-    map.set(label, cur);
-  }
-  return [...map.values()].sort((a, b) => b.count - a.count);
-});
+function directoryQuery(): AdminCrmDirectoryQuery {
+  return {
+    audience: props.audience,
+    state: props.stateScope && props.stateScope !== "all" ? props.stateScope : undefined,
+    q: query.value.trim() || undefined,
+    segment: segment.value,
+    precinct: precinct.value || undefined,
+    score_band: scoreBand.value,
+    tag: tagFilter.value || undefined,
+    last_contact: lastContact.value,
+  };
+}
 
-const matrixGroups = computed(() => {
-  const order = ["Strong", "Likely", "Supporter", "Soft Support", "Undecided", "Oppose Lean"];
-  const map = new Map<string, AdminCrmRow[]>();
-  for (const row of filteredRows.value) {
-    const key = row.support_label || "Unscored";
-    const list = map.get(key) || [];
-    list.push(row);
-    map.set(key, list);
+/** Every row matching the active filter (server-capped), for export / select-all / broadcast. */
+async function loadAllFiltered() {
+  const data = await loadDirectory({ ...directoryQuery(), all_rows: true });
+  if (data.truncated) {
+    emit("message", `Only the first ${data.rows.length.toLocaleString()} of ${data.filtered_total.toLocaleString()} matching contacts were loaded — narrow the filter to reach the rest.`);
   }
-  const keys = [...map.keys()].sort((a, b) => {
-    const ia = order.indexOf(a);
-    const ib = order.indexOf(b);
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-  });
-  return keys.map((label) => ({ label, rows: map.get(label) || [] }));
-});
+  return data.rows;
+}
 
 watch(searchQuery, (value) => {
   if (value) query.value = value;
 });
 
-watch([query, segment, precinct, scoreBand, tagFilter, lastContact, pageSize], () => {
-  page.value = 1;
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(query, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    if (page.value === 1) void refresh();
+    else page.value = 1;
+  }, 300);
 });
+
+watch([segment, precinct, scoreBand, tagFilter, lastContact, pageSize], () => {
+  if (page.value === 1) void refresh();
+  else page.value = 1;
+});
+
+watch(page, () => {
+  void refresh();
+});
+
+onBeforeUnmount(() => clearTimeout(searchTimer));
 
 async function refreshCrmMap() {
   const top = mapClusters.value[0];
@@ -267,10 +216,6 @@ watch(
   },
 );
 
-watch(pageCount, (count) => {
-  if (page.value > count) page.value = count;
-});
-
 watch(
   () => form.lga,
   async (lga) => {
@@ -286,7 +231,9 @@ onMounted(async () => {
 watch(
   () => selectedOrg.value?.id,
   () => {
-    void refresh();
+    deselectAll();
+    if (page.value === 1) void refresh();
+    else page.value = 1;
   },
 );
 
@@ -309,10 +256,6 @@ function onBroadcastDispatched(id: string) {
   goToSmsAnalytics(id);
 }
 
-function isDonor(row: AdminCrmRow) {
-  return row.account_type === "donor" || row.tags.some((t) => t.toLowerCase().includes("donor"));
-}
-
 function precinctLabel(row: AdminCrmRow) {
   if (row.ward && row.lga) return `${row.ward}, ${row.lga}`;
   return row.ward || row.lga || row.polling_unit || "";
@@ -330,17 +273,6 @@ function initials(name: string) {
   if (!parts.length) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-}
-
-function matchesLastContact(row: AdminCrmRow, band: "24h" | "7d" | "30d") {
-  const stamp = row.last_touch_at || row.created_at;
-  if (!stamp) return false;
-  const then = new Date(stamp).getTime();
-  if (Number.isNaN(then)) return false;
-  const hours = (Date.now() - then) / 36e5;
-  if (band === "24h") return hours <= 24;
-  if (band === "7d") return hours <= 24 * 7;
-  return hours <= 24 * 30;
 }
 
 function supportBarClass(score: number) {
@@ -386,29 +318,39 @@ function toggleRowMenu(id: string) {
   openMenu.value = "row";
 }
 
-function toggleSelect(id: string) {
-  const next = new Set(selected.value);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
+function toggleSelect(row: AdminCrmRow) {
+  const next = new Map(selected.value);
+  if (next.has(row.id)) next.delete(row.id);
+  else next.set(row.id, row);
   selected.value = next;
 }
 
 function toggleSelectPage() {
-  const next = new Set(selected.value);
+  const next = new Map(selected.value);
   if (allPageSelected.value) {
     for (const row of pagedRows.value) next.delete(row.id);
   } else {
-    for (const row of pagedRows.value) next.add(row.id);
+    for (const row of pagedRows.value) next.set(row.id, row);
   }
   selected.value = next;
 }
 
 function deselectAll() {
-  selected.value = new Set();
+  selected.value = new Map();
 }
 
-function selectAllFiltered() {
-  selected.value = new Set(filteredRows.value.map((row) => row.id));
+const selectingAll = ref(false);
+
+async function selectAllFiltered() {
+  selectingAll.value = true;
+  try {
+    const all = await loadAllFiltered();
+    selected.value = new Map(all.map((row) => [row.id, row]));
+  } catch (e: unknown) {
+    emit("error", crmError(e, "Could not select every matching contact."));
+  } finally {
+    selectingAll.value = false;
+  }
 }
 
 function bulkSelectPage() {
@@ -416,17 +358,22 @@ function bulkSelectPage() {
 }
 
 async function refresh() {
-  loading.value = true;
+  const seq = ++requestSeq;
+  fetching.value = true;
   try {
-    const data = await loadDirectory();
+    const data = await loadDirectory({ ...directoryQuery(), page: page.value, page_size: pageSize.value });
+    if (seq !== requestSeq) return; // a newer filter/page request superseded this one
     directory.value = data;
     rows.value = data.rows;
-    const keep = new Set(data.rows.map((row) => row.id));
-    selected.value = new Set([...selected.value].filter((id) => keep.has(id)));
+    // The server clamps the page when the result set shrinks (e.g. after deletes).
+    if (data.page !== page.value) page.value = data.page;
   } catch (e: unknown) {
-    emit("error", crmError(e, "Could not load supporter directory."));
+    if (seq === requestSeq) emit("error", crmError(e, "Could not load supporter directory."));
   } finally {
-    loading.value = false;
+    if (seq === requestSeq) {
+      fetching.value = false;
+      loading.value = false;
+    }
   }
 }
 
@@ -467,8 +414,17 @@ function exportRows(list: AdminCrmRow[], filename: string) {
   emit("message", `Exported ${list.length} contact(s).`);
 }
 
-function exportAudience() {
-  exportRows(filteredRows.value, "e-mobilize-audience.csv");
+const exporting = ref(false);
+
+async function exportAudience() {
+  exporting.value = true;
+  try {
+    exportRows(await loadAllFiltered(), "e-mobilize-audience.csv");
+  } catch (e: unknown) {
+    emit("error", crmError(e, "Could not export the directory."));
+  } finally {
+    exporting.value = false;
+  }
 }
 
 function exportSelected() {
@@ -520,9 +476,17 @@ function assignSelected() {
   );
 }
 
-function broadcastSms() {
+const broadcastFilterRows = ref<AdminCrmRow[]>([]);
+
+async function broadcastSms() {
   const ready = selectedRows.value.filter((row) => row.phone && row.sms_ok);
-  const filterReady = filteredRows.value.filter((row) => row.phone && row.sms_ok);
+  try {
+    broadcastFilterRows.value = await loadAllFiltered();
+  } catch (e: unknown) {
+    emit("error", crmError(e, "Could not load the active filter for broadcast."));
+    return;
+  }
+  const filterReady = broadcastFilterRows.value.filter((row) => row.phone && row.sms_ok);
   if (!ready.length && !filterReady.length) {
     emit("error", "No SMS-ready contacts in selection or active filter.");
     return;
@@ -665,7 +629,13 @@ async function confirmDelete() {
       result = await deleteAllContacts({ bulkImportOnly: deleteAllImportsOnly.value });
     }
     pendingDelete.value = null;
-    if (pending.mode !== "one") deselectAll();
+    if (pending.mode === "one") {
+      const next = new Map(selected.value);
+      next.delete(pending.row.id);
+      selected.value = next;
+    } else {
+      deselectAll();
+    }
     emit(
       "message",
       pending.mode === "one"
@@ -711,9 +681,8 @@ async function submitCreate() {
       tags: form.tags || [],
     };
     const created = await createContact(payload);
-    rows.value = [created, ...rows.value];
-    if (directory.value) directory.value.total += 1;
     showCreate.value = false;
+    void refresh();
     form.name = "";
     form.phone = "";
     form.email = "";
@@ -731,10 +700,10 @@ async function submitCreate() {
 }
 
 function showingLabel() {
-  if (!filteredRows.value.length) return "Showing 0 contacts in active filter";
+  if (!filteredTotal.value) return "Showing 0 contacts in active filter";
   const start = (page.value - 1) * pageSize.value + 1;
-  const end = Math.min(page.value * pageSize.value, filteredRows.value.length);
-  return `Showing ${start}–${end} of ${filteredRows.value.length.toLocaleString()} contacts in active filter`;
+  const end = Math.min(page.value * pageSize.value, filteredTotal.value);
+  return `Showing ${start}–${end} of ${filteredTotal.value.toLocaleString()} contacts in active filter`;
 }
 </script>
 
@@ -774,10 +743,11 @@ function showingLabel() {
         <button
           class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
           type="button"
+          :disabled="exporting"
           @click="exportAudience"
         >
           <span class="material-symbols-outlined shrink-0 text-[18px] text-outline">file_download</span>
-          <span class="truncate">Export CSV</span>
+          <span class="truncate">{{ exporting ? "Exporting…" : "Export CSV" }}</span>
         </button>
         <button
           class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-surface-container-lowest px-4 font-button-text text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
@@ -1108,9 +1078,9 @@ function showingLabel() {
           <p class="text-xs text-on-navy">
             <template v-if="crmMapData">
               {{ crmMapData.live_count }} live · {{ crmMapData.registered_count }} registered ·
-              {{ filteredRows.length.toLocaleString() }} contact(s)
+              {{ filteredTotal.toLocaleString() }} contact(s)
             </template>
-            <template v-else>{{ filteredRows.length.toLocaleString() }} contact(s) after filters</template>
+            <template v-else>{{ filteredTotal.toLocaleString() }} contact(s) after filters</template>
           </p>
         </div>
       </div>
@@ -1129,7 +1099,7 @@ function showingLabel() {
       <div v-for="group in matrixGroups" :key="group.label" class="rounded-xl bg-surface-container-lowest p-4 shadow-sm">
         <div class="mb-3 flex items-center justify-between">
           <h3 class="font-button-text text-sm font-bold text-primary">{{ group.label }}</h3>
-          <span class="font-label-caps text-xs text-outline">{{ group.rows.length }}</span>
+          <span class="font-label-caps text-xs text-outline">{{ group.count.toLocaleString() }}</span>
         </div>
         <ul class="space-y-2">
           <li v-for="row in group.rows.slice(0, 8)" :key="row.id" class="flex items-center justify-between gap-2 text-xs">
@@ -1142,7 +1112,7 @@ function showingLabel() {
 
     <div v-else class="flex flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
       <div v-if="loading" class="p-10 text-center text-sm text-outline">Loading directory…</div>
-      <div v-else class="w-full overflow-x-auto">
+      <div v-else class="w-full overflow-x-auto transition-opacity" :class="fetching ? 'pointer-events-none opacity-60' : ''">
         <table class="w-full border-collapse text-left text-xs">
           <thead class="bg-surface-container-low font-label-caps text-[11px] uppercase tracking-wider text-outline">
             <tr class="border-b border-surface-container-low">
@@ -1159,7 +1129,7 @@ function showingLabel() {
             </tr>
           </thead>
           <tbody class="divide-y divide-surface-container-low font-body-md text-on-surface">
-            <tr v-if="!filteredRows.length">
+            <tr v-if="!pagedRows.length">
               <td colspan="8" class="px-4 py-10 text-center text-sm text-outline">
                 No supporters or voters match the current filter.
               </td>
@@ -1171,7 +1141,7 @@ function showingLabel() {
               :class="selected.has(row.id) ? 'bg-secondary/5' : ''"
             >
               <td class="px-4 py-3.5 text-center">
-                <input class="rounded" type="checkbox" :checked="selected.has(row.id)" @change="toggleSelect(row.id)" />
+                <input class="rounded" type="checkbox" :checked="selected.has(row.id)" @change="toggleSelect(row)" />
               </td>
               <td class="px-4 py-3.5">
                 <div class="flex items-center gap-3">
@@ -1299,12 +1269,13 @@ function showingLabel() {
           </div>
           <span class="hidden text-xs text-on-primary-container sm:inline">| Ready for operational batch dispatch</span>
           <button
-            v-if="selectedCount < filteredRows.length"
+            v-if="selectedCount < filteredTotal"
             class="font-label-caps text-xs font-bold text-electric-pink underline-offset-2 hover:underline"
             type="button"
+            :disabled="selectingAll"
             @click="selectAllFiltered"
           >
-            Select all {{ filteredRows.length.toLocaleString() }} in filter
+            {{ selectingAll ? "Selecting…" : `Select all ${filteredTotal.toLocaleString()} in filter` }}
           </button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -1398,7 +1369,7 @@ function showingLabel() {
     <AdminCrmSmsBroadcastModal
       :open="showBroadcast"
       :selected-rows="selectedRows"
-      :filter-rows="filteredRows"
+      :filter-rows="broadcastFilterRows"
       @close="showBroadcast = false"
       @error="(msg: string) => emit('error', msg)"
       @message="(msg: string) => emit('message', msg)"

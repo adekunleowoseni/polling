@@ -31,8 +31,32 @@ export type AdminCrmDirectory = {
   follow_up: number;
   high_turnout: number;
   rows: AdminCrmRow[];
+  filtered_total: number;
+  verified_in_view: number;
+  page: number;
+  page_size: number;
+  truncated: boolean;
+  precinct_options: string[];
+  tag_options: string[];
+  clusters: { label: string; count: number; strong: number }[];
+  matrix: { label: string; count: number; rows: AdminCrmRow[] }[];
   org_id?: string | null;
   org_name?: string | null;
+};
+
+export type AdminCrmDirectoryQuery = {
+  audience?: "voters" | "all";
+  state?: string;
+  q?: string;
+  segment?: "all" | "turnout" | "undecided" | "donors" | "followup";
+  precinct?: string;
+  score_band?: "all" | "strong" | "persuadable" | "oppose";
+  tag?: string;
+  last_contact?: "all" | "24h" | "7d" | "30d";
+  page?: number;
+  page_size?: number;
+  /** Return every filtered row (server-capped) instead of one page. */
+  all_rows?: boolean;
 };
 
 export type AdminVoterImportOut = {
@@ -83,6 +107,17 @@ export type AdminCrmSmsBroadcastOut = {
   credits: number;
   timing: string;
   schedule_at: string | null;
+  send_test: boolean;
+};
+
+export type AdminCrmSmsDispatchSummary = {
+  id: string;
+  title: string;
+  template: string;
+  channel: string;
+  queued: number;
+  credits: number;
+  created_at: string | null;
   send_test: boolean;
 };
 
@@ -202,11 +237,15 @@ export function useAdminCrm() {
   const { apiBase, authHeaders } = useAdminAuth();
   const { orgQuery } = useAdminOrgContext();
 
-  async function loadDirectory() {
+  async function loadDirectory(params: AdminCrmDirectoryQuery = {}) {
+    const query: Record<string, string | number | boolean | undefined> = { ...orgQuery.value };
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "" && value !== null) query[key] = value;
+    }
     return $fetch<AdminCrmDirectory>(`${apiBase}/admin/crm/directory`, {
       headers: authHeaders(),
-      query: orgQuery.value,
-      timeout: 15000,
+      query,
+      timeout: params.all_rows ? 60000 : 20000,
     });
   }
 
