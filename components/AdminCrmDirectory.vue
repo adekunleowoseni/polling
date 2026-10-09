@@ -7,6 +7,7 @@ import {
   type AdminCrmRow,
   type AdminCrmSmsDispatchSummary,
 } from "~/composables/useAdminCrm";
+import { fieldTeamPath } from "~/composables/useFieldTeam";
 
 const props = withDefaults(
   defineProps<{
@@ -55,6 +56,9 @@ const view = ref<"table" | "map" | "grid">("table");
 const precinct = ref("");
 const phoneFilter = ref("");
 const pollingUnit = ref("");
+const lgaFilter = ref("");
+const wardFilter = ref("");
+const assignment = ref<"" | "none" | "any">("");
 const puSearch = ref("");
 const scoreBand = ref<"all" | "strong" | "persuadable" | "oppose">("all");
 const tagFilter = ref("");
@@ -165,6 +169,9 @@ function directoryQuery(): AdminCrmDirectoryQuery {
     q: query.value.trim() || undefined,
     segment: segment.value,
     precinct: precinct.value || undefined,
+    lga: lgaFilter.value || undefined,
+    ward: wardFilter.value || undefined,
+    assigned_agent: assignment.value || undefined,
     phone: phoneFilter.value.replace(/\D/g, "") || undefined,
     polling_unit: pollingUnit.value || undefined,
     score_band: scoreBand.value,
@@ -195,7 +202,16 @@ watch([query, phoneFilter], () => {
   }, 300);
 });
 
-watch([segment, precinct, pollingUnit, scoreBand, tagFilter, lastContact, pageSize], () => {
+// Ward names repeat across LGAs, and polling units sit inside a ward: narrow downwards.
+watch(lgaFilter, () => {
+  wardFilter.value = "";
+  pollingUnit.value = "";
+});
+watch(wardFilter, () => {
+  pollingUnit.value = "";
+});
+
+watch([segment, precinct, pollingUnit, lgaFilter, wardFilter, assignment, scoreBand, tagFilter, lastContact, pageSize], () => {
   if (page.value === 1) void refresh();
   else page.value = 1;
 });
@@ -888,21 +904,31 @@ function showingLabel() {
     </section>
 
     <div class="flex flex-col gap-3 rounded-xl bg-surface-container-lowest p-4 shadow-sm">
-      <div class="flex flex-col items-stretch justify-between gap-3 lg:flex-row lg:items-center">
+      <div class="flex flex-col items-stretch gap-3 md:flex-row md:items-center">
         <div class="relative flex-1">
-          <span class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline">search</span>
+          <span class="material-symbols-outlined absolute left-3.5 top-3 text-[20px] text-outline">search</span>
           <input
             v-model="query"
-            class="w-full rounded-xl bg-off-white py-2 pl-9 pr-4 font-body-md text-xs text-on-surface transition-colors placeholder:text-outline focus:bg-surface-container-lowest focus:outline-none"
-            placeholder="Filter by name, VIN, voter ID, precinct, or tag..."
-            type="text"
+            class="h-12 w-full rounded-xl bg-off-white pl-11 pr-10 font-body-md text-sm text-on-surface transition-colors placeholder:text-outline focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-secondary/30"
+            placeholder="Search voters by name, VIN, polling unit, ward, LGA or voter ID…"
+            type="search"
+            aria-label="Search voters"
           />
+          <button
+            v-if="query"
+            class="absolute right-3 top-3 text-outline hover:text-primary"
+            type="button"
+            aria-label="Clear search"
+            @click="query = ''"
+          >
+            <span class="material-symbols-outlined text-[20px]">close</span>
+          </button>
         </div>
-        <div class="relative lg:w-52">
-          <span class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline">call</span>
+        <div class="relative md:w-60">
+          <span class="material-symbols-outlined absolute left-3.5 top-3 text-[20px] text-outline">call</span>
           <input
             v-model="phoneFilter"
-            class="w-full rounded-xl bg-off-white py-2 pl-9 pr-8 font-body-md text-xs text-on-surface transition-colors placeholder:text-outline focus:bg-surface-container-lowest focus:outline-none"
+            class="h-12 w-full rounded-xl bg-off-white pl-11 pr-8 font-body-md text-sm text-on-surface transition-colors placeholder:text-outline focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-secondary/30"
             placeholder="Phone number..."
             type="tel"
             inputmode="tel"
@@ -910,41 +936,54 @@ function showingLabel() {
           />
           <button
             v-if="phoneFilter"
-            class="absolute right-2 top-2 text-outline hover:text-primary"
+            class="absolute right-3 top-3 text-outline hover:text-primary"
             type="button"
             aria-label="Clear phone filter"
             @click="phoneFilter = ''"
           >
-            <span class="material-symbols-outlined text-[16px]">close</span>
+            <span class="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
+      </div>
+      <div class="flex flex-col items-stretch justify-between gap-3 lg:flex-row lg:items-center">
         <div class="flex flex-wrap items-center gap-2">
-          <div class="relative">
-            <button
-              class="flex items-center gap-1.5 rounded-xl bg-surface-container-low px-3 py-2 font-label-caps text-xs font-bold text-primary transition-colors hover:bg-surface-container"
-              type="button"
-              @click.stop="toggleMenu('precinct')"
+          <label class="relative">
+            <span class="sr-only">LGA</span>
+            <span class="material-symbols-outlined pointer-events-none absolute left-2.5 top-2 text-[16px]" :class="lgaFilter ? 'text-pure-white' : 'text-outline'">location_city</span>
+            <select
+              v-model="lgaFilter"
+              class="h-9 max-w-[200px] appearance-none rounded-xl pl-8 pr-3 font-label-caps text-xs font-bold focus:outline-none"
+              :class="lgaFilter ? 'bg-deep-navy text-pure-white' : 'bg-surface-container-low text-primary'"
             >
-              <span class="material-symbols-outlined text-[16px]">pin_drop</span>
-              <span>{{ precinct || "Precinct / Ward" }}</span>
-              <span class="material-symbols-outlined text-[16px]">expand_more</span>
-            </button>
-            <div
-              v-if="openMenu === 'precinct'"
-              class="absolute right-0 z-20 mt-2 max-h-64 w-64 overflow-y-auto rounded-xl bg-surface-container-lowest p-2 shadow-lg"
+              <option value="">All LGAs</option>
+              <option v-for="opt in directory?.lga_options ?? []" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </label>
+          <label class="relative">
+            <span class="sr-only">Ward</span>
+            <span class="material-symbols-outlined pointer-events-none absolute left-2.5 top-2 text-[16px]" :class="wardFilter ? 'text-pure-white' : 'text-outline'">pin_drop</span>
+            <select
+              v-model="wardFilter"
+              class="h-9 max-w-[220px] appearance-none rounded-xl pl-8 pr-3 font-label-caps text-xs font-bold focus:outline-none"
+              :class="wardFilter ? 'bg-deep-navy text-pure-white' : 'bg-surface-container-low text-primary'"
             >
-              <button class="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-surface-container-low" type="button" @click="precinct = ''; pollingUnit = ''; openMenu = ''">All precincts</button>
-              <button
-                v-for="opt in precinctOptions"
-                :key="opt"
-                class="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-surface-container-low"
-                type="button"
-                @click="precinct = opt; pollingUnit = ''; openMenu = ''"
-              >
-                {{ opt }}
-              </button>
-            </div>
-          </div>
+              <option value="">{{ lgaFilter ? "All wards" : "All wards (any LGA)" }}</option>
+              <option v-for="opt in directory?.ward_options ?? []" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </label>
+          <label class="relative">
+            <span class="sr-only">Field agent assignment</span>
+            <span class="material-symbols-outlined pointer-events-none absolute left-2.5 top-2 text-[16px]" :class="assignment ? 'text-pure-white' : 'text-outline'">badge</span>
+            <select
+              v-model="assignment"
+              class="h-9 appearance-none rounded-xl pl-8 pr-3 font-label-caps text-xs font-bold focus:outline-none"
+              :class="assignment ? 'bg-deep-navy text-pure-white' : 'bg-surface-container-low text-primary'"
+            >
+              <option value="">Any field agent</option>
+              <option value="none">No field agent yet</option>
+              <option value="any">Assigned to an agent</option>
+            </select>
+          </label>
           <div class="relative">
             <button
               class="flex max-w-[220px] items-center gap-1.5 rounded-xl px-3 py-2 font-label-caps text-xs font-bold transition-colors"
@@ -971,7 +1010,7 @@ function showingLabel() {
               <div class="max-h-64 overflow-y-auto">
                 <button class="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-surface-container-low" type="button" @click="pollingUnit = ''; openMenu = ''">All polling units</button>
                 <p v-if="!pollingUnitOptions.length" class="px-3 py-2 text-xs text-outline">
-                  {{ puSearch ? "No polling unit matches." : precinct ? "No polling units recorded in this precinct." : "No polling units recorded yet." }}
+                  {{ puSearch ? "No polling unit matches." : wardFilter || lgaFilter ? "No polling units recorded here." : "No polling units recorded yet." }}
                 </p>
                 <button
                   v-for="opt in pollingUnitOptions"
@@ -984,8 +1023,8 @@ function showingLabel() {
                   {{ opt }}
                 </button>
               </div>
-              <p v-if="!precinct && (directory?.polling_unit_options.length ?? 0) > 200" class="px-3 pt-2 text-[10px] text-outline">
-                Tip: pick a precinct first or search to narrow the list.
+              <p v-if="!wardFilter && (directory?.polling_unit_options.length ?? 0) > 200" class="px-3 pt-2 text-[10px] text-outline">
+                Tip: pick an LGA and ward first, or search, to narrow the list.
               </p>
             </div>
           </div>
@@ -1257,6 +1296,15 @@ function showingLabel() {
                   {{ row.polling_unit }}
                 </button>
                 <span v-else class="text-[11px] text-outline">Unassigned</span>
+                <NuxtLink
+                  v-if="row.assigned_agent_id"
+                  :to="fieldTeamPath(row.assigned_agent_id)"
+                  class="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-secondary hover:underline"
+                  :title="`Field agent responsible for ${row.name}`"
+                >
+                  <span class="material-symbols-outlined text-[12px]">badge</span>
+                  {{ row.assigned_agent_name || "Field agent" }}
+                </NuxtLink>
               </td>
               <td class="px-4 py-3.5">
                 <div class="flex flex-col">

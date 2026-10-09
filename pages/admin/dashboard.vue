@@ -479,8 +479,12 @@
         audience="voters"
         @error="(msg: string) => (actionError = msg)"
         @message="(msg: string) => (message = msg)"
-        @open-agent="openAgentModal"
+        @open-agent="openAgentPage"
       />
+    </section>
+
+    <section v-else-if="activeTab === 'hierarchy'" class="flex flex-col gap-6">
+      <AdminFieldTeamPanel @error="(msg: string) => (actionError = msg)" />
     </section>
 
     <section v-else-if="activeTab === 'field-agents'" class="flex flex-col gap-6">
@@ -664,7 +668,7 @@
             :key="agent.id"
             type="button"
             class="rounded-xl bg-surface-container-low p-4 text-left transition hover:bg-surface-container"
-            @click="openAgentModal(agent.id)"
+            @click="openAgentPage(agent.id)"
           >
             <p class="truncate font-medium text-primary">{{ agent.name }}</p>
             <p class="truncate text-xs text-outline">{{ agent.email }}</p>
@@ -694,7 +698,7 @@
                 </dd>
               </div>
             </dl>
-            <p class="mt-3 text-[10px] text-secondary">Manage →</p>
+            <p class="mt-3 text-[10px] text-secondary">Open team &amp; voters →</p>
           </button>
         </div>
       </div>
@@ -1041,11 +1045,12 @@
 
 <script setup lang="ts">
 import { ADMIN_NAV } from "~/composables/useAdminShell";
+import { fieldTeamPath } from "~/composables/useFieldTeam";
 import type { PollingUnit } from "~/composables/useVideoFeeds";
 import type { AdminOverview } from "~/composables/useAdminAuth";
 import type { FeedSnap } from "~/composables/useFeedSnaps";
 
-import type { AdminAgentDetail } from "~/components/AdminAgentManageModal";
+import type { AdminAgentDetail } from "~/components/AdminAgentManageModal.vue";
 
 type AdminAgentSummary = {
   id: string;
@@ -2242,6 +2247,10 @@ async function deleteRecording(id: string) {
   } catch {
     actionError.value = "Failed to delete the recording.";
   }
+}
+
+function openAgentPage(agentId: string) {
+  void navigateTo(fieldTeamPath(agentId));
 }
 
 async function openAgentModal(agentId: string) {

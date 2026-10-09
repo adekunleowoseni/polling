@@ -1098,6 +1098,8 @@ async function deleteRecording(id: string) {
       </section>
 
       <!-- Workspace -->
+      <AdminFieldTeamPanel embedded @error="(msg: string) => emit('error', msg)" />
+
       <section class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         <div class="flex flex-col gap-4 lg:col-span-7">
           <div class="relative flex flex-col overflow-hidden rounded-xl bg-surface-container-lowest p-4 shadow-sm">

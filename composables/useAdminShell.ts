@@ -35,6 +35,7 @@ export const ADMIN_NAV_GROUPS = [
     label: "Field Operations",
     items: [
       { id: "recordings", label: "Field Canvassing", icon: "how_to_reg" },
+      { id: "hierarchy", label: "Team Hierarchy", icon: "account_tree" },
       { id: "votes", label: "Vote Results", icon: "how_to_vote" },
       { id: "parties", label: "Parties & Candidates", icon: "flag" },
       { id: "elective-offices", label: "Elective Offices", icon: "account_balance" },
@@ -82,10 +83,14 @@ export function useAdminShell() {
     "system",
   ]);
   const smsAnalyticsDispatchId = useState<string | null>("adminSmsAnalyticsDispatchId", () => null);
+  // Captured during setup: composables can't be resolved later inside click handlers.
+  const route = useRoute();
 
   function setTab(id: AdminTabId) {
     activeTab.value = id;
     sidebarOpen.value = false;
+    // Tabs live on the dashboard; from a standalone admin page (e.g. an agent page) go back to it.
+    if (route.path !== "/admin/dashboard") void navigateTo("/admin/dashboard");
     const group = ADMIN_NAV_GROUPS.find((g) => g.items.some((item) => item.id === id));
     if (group && !openNavGroups.value.includes(group.id)) {
       openNavGroups.value = [...openNavGroups.value, group.id];

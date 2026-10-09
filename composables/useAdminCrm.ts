@@ -22,6 +22,8 @@ export type AdminCrmRow = {
   created_at: string | null;
   /** PVC / voter identification number (voter records only). */
   vin: string | null;
+  assigned_agent_id?: string | null;
+  assigned_agent_name?: string | null;
 };
 
 export type AdminCrmDirectory = {
@@ -40,6 +42,8 @@ export type AdminCrmDirectory = {
   truncated: boolean;
   precinct_options: string[];
   polling_unit_options: string[];
+  lga_options: string[];
+  ward_options: string[];
   tag_options: string[];
   clusters: { label: string; count: number; strong: number }[];
   matrix: { label: string; count: number; rows: AdminCrmRow[] }[];
@@ -59,6 +63,10 @@ export type AdminCrmDirectoryQuery = {
   /** Partial phone match; +234… and 0… are treated the same. */
   phone?: string;
   polling_unit?: string;
+  lga?: string;
+  ward?: string;
+  /** Field agent id, "none" (unassigned) or "any" (assigned to someone). */
+  assigned_agent?: string;
   page?: number;
   page_size?: number;
   /** Return every filtered row (server-capped) instead of one page. */

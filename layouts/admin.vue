@@ -62,6 +62,7 @@
               </button>
             </div>
           </div>
+          <AdminFieldTeamSidebar v-if="canAccessTab('hierarchy')" />
         </nav>
       </div>
 
