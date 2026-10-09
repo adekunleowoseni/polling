@@ -20,6 +20,8 @@ export type AdminCrmRow = {
   kyc_status: string | null;
   account_type: string | null;
   created_at: string | null;
+  /** PVC / voter identification number (voter records only). */
+  vin: string | null;
 };
 
 export type AdminCrmDirectory = {
@@ -37,6 +39,7 @@ export type AdminCrmDirectory = {
   page_size: number;
   truncated: boolean;
   precinct_options: string[];
+  polling_unit_options: string[];
   tag_options: string[];
   clusters: { label: string; count: number; strong: number }[];
   matrix: { label: string; count: number; rows: AdminCrmRow[] }[];
@@ -53,6 +56,9 @@ export type AdminCrmDirectoryQuery = {
   score_band?: "all" | "strong" | "persuadable" | "oppose";
   tag?: string;
   last_contact?: "all" | "24h" | "7d" | "30d";
+  /** Partial phone match; +234… and 0… are treated the same. */
+  phone?: string;
+  polling_unit?: string;
   page?: number;
   page_size?: number;
   /** Return every filtered row (server-capped) instead of one page. */

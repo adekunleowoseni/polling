@@ -53,10 +53,13 @@ const query = ref("");
 const segment = ref<"all" | "turnout" | "undecided" | "donors" | "followup">("all");
 const view = ref<"table" | "map" | "grid">("table");
 const precinct = ref("");
+const phoneFilter = ref("");
+const pollingUnit = ref("");
+const puSearch = ref("");
 const scoreBand = ref<"all" | "strong" | "persuadable" | "oppose">("all");
 const tagFilter = ref("");
 const lastContact = ref<"all" | "24h" | "7d" | "30d">("all");
-const openMenu = ref<"" | "precinct" | "score" | "tags" | "contact" | "row">("");
+const openMenu = ref<"" | "precinct" | "pu" | "score" | "tags" | "contact" | "row">("");
 const rowMenuId = ref<string | null>(null);
 
 const page = ref(1);
@@ -114,6 +117,12 @@ const metrics = computed(() => {
 });
 
 const precinctOptions = computed(() => directory.value?.precinct_options ?? []);
+// A precinct can hold hundreds of units, so the menu has its own search and shows the first 200 matches.
+const pollingUnitOptions = computed(() => {
+  const needle = puSearch.value.trim().toLowerCase();
+  const all = directory.value?.polling_unit_options ?? [];
+  return (needle ? all.filter((pu) => pu.toLowerCase().includes(needle)) : all).slice(0, 200);
+});
 const tagOptions = computed(() => directory.value?.tag_options ?? []);
 const filteredTotal = computed(() => directory.value?.filtered_total ?? 0);
 const verifiedInView = computed(() => directory.value?.verified_in_view ?? 0);
@@ -156,6 +165,8 @@ function directoryQuery(): AdminCrmDirectoryQuery {
     q: query.value.trim() || undefined,
     segment: segment.value,
     precinct: precinct.value || undefined,
+    phone: phoneFilter.value.replace(/\D/g, "") || undefined,
+    polling_unit: pollingUnit.value || undefined,
     score_band: scoreBand.value,
     tag: tagFilter.value || undefined,
     last_contact: lastContact.value,
@@ -176,7 +187,7 @@ watch(searchQuery, (value) => {
 });
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-watch(query, () => {
+watch([query, phoneFilter], () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     if (page.value === 1) void refresh();
@@ -184,7 +195,7 @@ watch(query, () => {
   }, 300);
 });
 
-watch([segment, precinct, scoreBand, tagFilter, lastContact, pageSize], () => {
+watch([segment, precinct, pollingUnit, scoreBand, tagFilter, lastContact, pageSize], () => {
   if (page.value === 1) void refresh();
   else page.value = 1;
 });
@@ -275,28 +286,6 @@ function initials(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-function supportBarClass(score: number) {
-  if (score >= 62) return "bg-action-green";
-  if (score >= 40) return "bg-secondary";
-  return "bg-outline";
-}
-
-function supportTextClass(score: number) {
-  if (score >= 62) return "text-action-green";
-  if (score >= 40) return "text-secondary";
-  return "text-outline";
-}
-
-function tagClass(tag: string) {
-  const t = tag.toLowerCase();
-  if (t.includes("donor") || t.includes("undecided")) return "bg-secondary-fixed/50 text-secondary";
-  if (t.includes("refus") || t.includes("oppose") || t.includes("dnc")) return "bg-error-container text-error";
-  if (t.includes("agent") || t.includes("member") || t.includes("canvass") || t.includes("volunteer") || t.includes("captain")) {
-    return "bg-tertiary-fixed/40 text-on-tertiary-fixed";
-  }
-  return "bg-surface-container-low text-on-surface";
-}
-
 function avatarClass(row: AdminCrmRow) {
   if (selected.value.has(row.id)) return "bg-deep-navy text-pure-white";
   if (row.support_score >= 90) return "bg-secondary text-pure-white";
@@ -382,7 +371,7 @@ function exportRows(list: AdminCrmRow[], filename: string) {
     emit("error", "Nothing to export for the current selection.");
     return;
   }
-  const header = ["Name", "ID", "Type", "Email", "Phone", "State", "LGA", "Ward", "Support", "Score", "Tags", "Activity"];
+  const header = ["Name", "ID", "Type", "VIN", "Email", "Phone", "State", "LGA", "Ward", "Polling Unit", "Support", "Score", "Tags", "Activity"];
   const lines = [
     header.join(","),
     ...list.map((row) =>
@@ -390,11 +379,13 @@ function exportRows(list: AdminCrmRow[], filename: string) {
         row.name,
         contactRef(row),
         row.contact_type,
+        row.vin || "",
         row.email || "",
         row.phone || "",
         row.state || "",
         row.lga || "",
         row.ward || "",
+        row.polling_unit || "",
         row.support_label,
         row.support_score,
         row.tags.join("|"),
@@ -903,9 +894,29 @@ function showingLabel() {
           <input
             v-model="query"
             class="w-full rounded-xl bg-off-white py-2 pl-9 pr-4 font-body-md text-xs text-on-surface transition-colors placeholder:text-outline focus:bg-surface-container-lowest focus:outline-none"
-            placeholder="Filter by name, phone, voter ID, precinct, or tag..."
+            placeholder="Filter by name, VIN, voter ID, precinct, or tag..."
             type="text"
           />
+        </div>
+        <div class="relative lg:w-52">
+          <span class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline">call</span>
+          <input
+            v-model="phoneFilter"
+            class="w-full rounded-xl bg-off-white py-2 pl-9 pr-8 font-body-md text-xs text-on-surface transition-colors placeholder:text-outline focus:bg-surface-container-lowest focus:outline-none"
+            placeholder="Phone number..."
+            type="tel"
+            inputmode="tel"
+            aria-label="Filter by phone number"
+          />
+          <button
+            v-if="phoneFilter"
+            class="absolute right-2 top-2 text-outline hover:text-primary"
+            type="button"
+            aria-label="Clear phone filter"
+            @click="phoneFilter = ''"
+          >
+            <span class="material-symbols-outlined text-[16px]">close</span>
+          </button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <div class="relative">
@@ -922,16 +933,60 @@ function showingLabel() {
               v-if="openMenu === 'precinct'"
               class="absolute right-0 z-20 mt-2 max-h-64 w-64 overflow-y-auto rounded-xl bg-surface-container-lowest p-2 shadow-lg"
             >
-              <button class="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-surface-container-low" type="button" @click="precinct = ''; openMenu = ''">All precincts</button>
+              <button class="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-surface-container-low" type="button" @click="precinct = ''; pollingUnit = ''; openMenu = ''">All precincts</button>
               <button
                 v-for="opt in precinctOptions"
                 :key="opt"
                 class="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-surface-container-low"
                 type="button"
-                @click="precinct = opt; openMenu = ''"
+                @click="precinct = opt; pollingUnit = ''; openMenu = ''"
               >
                 {{ opt }}
               </button>
+            </div>
+          </div>
+          <div class="relative">
+            <button
+              class="flex max-w-[220px] items-center gap-1.5 rounded-xl px-3 py-2 font-label-caps text-xs font-bold transition-colors"
+              :class="pollingUnit ? 'bg-deep-navy text-pure-white' : 'bg-surface-container-low text-primary hover:bg-surface-container'"
+              type="button"
+              @click.stop="puSearch = ''; toggleMenu('pu')"
+            >
+              <span class="material-symbols-outlined text-[16px]">how_to_vote</span>
+              <span class="truncate">{{ pollingUnit || "Polling Unit" }}</span>
+              <span class="material-symbols-outlined text-[16px]">expand_more</span>
+            </button>
+            <div
+              v-if="openMenu === 'pu'"
+              class="absolute right-0 z-20 mt-2 w-72 rounded-xl bg-surface-container-lowest p-2 shadow-lg"
+              @click.stop
+            >
+              <input
+                v-model="puSearch"
+                class="mb-2 w-full rounded-lg bg-off-white px-3 py-2 text-xs text-on-surface placeholder:text-outline focus:outline-none"
+                placeholder="Search polling units..."
+                type="text"
+                aria-label="Search polling units"
+              />
+              <div class="max-h-64 overflow-y-auto">
+                <button class="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-surface-container-low" type="button" @click="pollingUnit = ''; openMenu = ''">All polling units</button>
+                <p v-if="!pollingUnitOptions.length" class="px-3 py-2 text-xs text-outline">
+                  {{ puSearch ? "No polling unit matches." : precinct ? "No polling units recorded in this precinct." : "No polling units recorded yet." }}
+                </p>
+                <button
+                  v-for="opt in pollingUnitOptions"
+                  :key="opt"
+                  class="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-surface-container-low"
+                  :class="opt === pollingUnit ? 'font-bold text-primary' : ''"
+                  type="button"
+                  @click="pollingUnit = opt; openMenu = ''"
+                >
+                  {{ opt }}
+                </button>
+              </div>
+              <p v-if="!precinct && (directory?.polling_unit_options.length ?? 0) > 200" class="px-3 pt-2 text-[10px] text-outline">
+                Tip: pick a precinct first or search to narrow the list.
+              </p>
             </div>
           </div>
           <div class="relative">
@@ -1122,8 +1177,8 @@ function showingLabel() {
               <th class="px-4 py-3.5 font-semibold">Supporter / Voter</th>
               <th class="px-4 py-3.5 font-semibold">Precinct &amp; Address</th>
               <th class="px-4 py-3.5 font-semibold">Contact &amp; Reachability</th>
-              <th class="px-4 py-3.5 font-semibold">Support Model</th>
-              <th class="px-4 py-3.5 font-semibold">Civic Tags &amp; Roles</th>
+              <th class="px-4 py-3.5 font-semibold">VIN Number</th>
+              <th class="px-4 py-3.5 font-semibold">Polling Unit</th>
               <th class="px-4 py-3.5 font-semibold">Recent Activity</th>
               <th class="px-4 py-3.5 text-right font-semibold">Actions</th>
             </tr>
@@ -1161,7 +1216,7 @@ function showingLabel() {
               <td class="px-4 py-3.5">
                 <div class="flex flex-col">
                   <span class="font-medium text-primary">{{ precinctLabel(row) || "Unassigned precinct" }}</span>
-                  <span class="text-[11px] text-outline">{{ row.address || row.polling_unit || row.state || "—" }}</span>
+                  <span class="text-[11px] text-outline">{{ row.address || row.state || "—" }}</span>
                 </div>
               </td>
               <td class="px-4 py-3.5">
@@ -1179,27 +1234,29 @@ function showingLabel() {
                 </div>
               </td>
               <td class="px-4 py-3.5">
-                <div class="flex w-28 flex-col gap-1">
-                  <div class="flex items-center justify-between font-label-caps text-[11px]">
-                    <span class="font-bold text-primary">{{ row.support_label }}</span>
-                    <span class="font-bold" :class="supportTextClass(row.support_score)">{{ row.support_score }}%</span>
-                  </div>
-                  <div class="h-1.5 w-full overflow-hidden rounded-full bg-surface-container-high">
-                    <div class="h-full rounded-full" :class="supportBarClass(row.support_score)" :style="{ width: `${row.support_score}%` }" />
-                  </div>
-                </div>
+                <button
+                  v-if="row.vin"
+                  class="group inline-flex items-center gap-1 font-mono text-[11px] font-semibold tracking-wide text-primary"
+                  title="Copy VIN"
+                  type="button"
+                  @click="copyText(row.vin, 'VIN')"
+                >
+                  <span>{{ row.vin }}</span>
+                  <span class="material-symbols-outlined text-[14px] text-outline opacity-0 transition group-hover:opacity-100">content_copy</span>
+                </button>
+                <span v-else class="text-[11px] text-outline">No VIN</span>
               </td>
               <td class="px-4 py-3.5">
-                <div class="flex max-w-xs flex-wrap items-center gap-1.5">
-                  <span
-                    v-for="tag in row.tags.slice(0, 3)"
-                    :key="tag"
-                    class="rounded-full px-2 py-0.5 font-label-caps text-[10px] font-bold"
-                    :class="tagClass(tag)"
-                  >
-                    {{ tag }}
-                  </span>
-                </div>
+                <button
+                  v-if="row.polling_unit"
+                  class="max-w-[220px] text-left text-[11px] font-medium text-primary hover:underline"
+                  title="Filter by this polling unit"
+                  type="button"
+                  @click="pollingUnit = row.polling_unit"
+                >
+                  {{ row.polling_unit }}
+                </button>
+                <span v-else class="text-[11px] text-outline">Unassigned</span>
               </td>
               <td class="px-4 py-3.5">
                 <div class="flex flex-col">
