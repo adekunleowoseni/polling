@@ -119,14 +119,14 @@ function rankTone(rank: string) {
             class="rounded-full bg-secondary/10 px-2 py-0.5 font-bold text-secondary"
             :title="`${node.totals.ward_coordinators} ward coordinator(s) under ${node.name}`"
           >
-            {{ node.totals.ward_coordinators.toLocaleString() }} ward
+            {{ node.totals.ward_coordinators.toLocaleString() }} ward coord{{ node.totals.ward_coordinators === 1 ? '' : 's' }}
           </span>
           <span
             v-if="node.totals.field_agents"
             class="rounded-full bg-action-green/20 px-2 py-0.5 font-bold text-on-tertiary-fixed"
             :title="`${node.totals.field_agents} field agent(s) under ${node.name}`"
           >
-            {{ node.totals.field_agents.toLocaleString() }} agents
+            {{ node.totals.field_agents.toLocaleString() }} agent{{ node.totals.field_agents === 1 ? '' : 's' }}
           </span>
           <button
             v-if="node.id"

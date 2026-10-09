@@ -82,9 +82,9 @@ onBeforeUnmount(() => clearTimeout(timer));
             <th class="px-3 py-2">Name</th>
             <th class="px-3 py-2">VIN</th>
             <th class="px-3 py-2">Phone</th>
-            <th class="px-3 py-2">Polling unit</th>
+            <th class="whitespace-nowrap px-3 py-2">Polling unit</th>
             <th class="px-3 py-2">Ward · LGA</th>
-            <th v-if="showAgent" class="px-3 py-2">Polling unit agent</th>
+            <th v-if="showAgent" class="whitespace-nowrap px-3 py-2">PU agent</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-surface-container-low">
@@ -94,15 +94,15 @@ onBeforeUnmount(() => clearTimeout(timer));
             </td>
           </tr>
           <tr v-for="v in data?.rows ?? []" :key="v.id">
-            <td class="px-3 py-2 font-semibold text-primary">{{ v.name }}</td>
+            <td class="whitespace-nowrap px-3 py-2 font-semibold text-primary">{{ v.name }}</td>
             <td class="px-3 py-2 font-mono text-[11px]">{{ v.vin || "—" }}</td>
             <td class="px-3 py-2">
               <a v-if="v.phone" :href="`tel:${v.phone}`" class="text-primary hover:underline">{{ v.phone }}</a>
               <span v-else class="text-outline">—</span>
             </td>
-            <td class="px-3 py-2">{{ v.polling_unit || "—" }}</td>
-            <td class="px-3 py-2 text-outline">{{ [v.ward, v.lga].filter(Boolean).join(" · ") || "—" }}</td>
-            <td v-if="showAgent" class="px-3 py-2">
+            <td class="whitespace-nowrap px-3 py-2">{{ v.polling_unit || "—" }}</td>
+            <td class="whitespace-nowrap px-3 py-2 text-outline">{{ [v.ward, v.lga].filter(Boolean).join(" · ") || "—" }}</td>
+            <td v-if="showAgent" class="whitespace-nowrap px-3 py-2">
               <NuxtLink v-if="v.assigned_agent_id" :to="fieldTeamPath(v.assigned_agent_id)" class="font-semibold text-secondary hover:underline">
                 {{ v.assigned_agent_name || "Agent" }}
               </NuxtLink>
