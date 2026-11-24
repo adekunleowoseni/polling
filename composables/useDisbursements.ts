@@ -191,6 +191,15 @@ export function useDisbursements() {
       body: { cluster_id: clusterId },
     });
 
+  const loadAgentCluster = (agentId: string) =>
+    $fetch<Cluster | null>(`${apiBase}/admin/disbursements/agents/${agentId}/cluster`, { headers: headers() });
+
+  const removeAgentCluster = (agentId: string) =>
+    $fetch(`${apiBase}/admin/disbursements/agents/${agentId}/cluster`, {
+      method: "DELETE",
+      headers: headers(),
+    });
+
   const loadPaymentProviders = () =>
     $fetch<PaymentProviders>(`${apiBase}/admin/disbursements/payment-providers`, { headers: headers() });
 
@@ -210,6 +219,8 @@ export function useDisbursements() {
     approveSchedule,
     lockBeneficiary,
     assignAgentCluster,
+    loadAgentCluster,
+    removeAgentCluster,
     loadPaymentProviders,
     savePaymentProviders,
   };

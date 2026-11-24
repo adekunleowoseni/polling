@@ -291,6 +291,50 @@
               </ul>
             </section>
 
+            <!-- Payments -->
+            <section v-else-if="activeTab === 'payments'" class="flex flex-col gap-4">
+              <div>
+                <h3 class="font-button-text text-base font-bold text-primary">Payment access</h3>
+                <p class="mt-1 text-xs text-outline">
+                  An agent in a cluster can pay that cluster's approved recipients. Without a cluster they cannot pay anyone.
+                </p>
+              </div>
+              <p v-if="clusterLoading" class="text-sm text-outline" role="status">Loading…</p>
+              <template v-else-if="clusterLoaded">
+                <p class="rounded-xl bg-surface-container-low p-3 text-sm text-on-surface">
+                  Current cluster: <strong>{{ agentCluster?.name || "None" }}</strong>
+                </p>
+                <label class="flex flex-col gap-1">
+                  <span class="text-xs text-on-surface">Cluster</span>
+                  <select v-model="editClusterId" :class="inputClass">
+                    <option value="">Choose a cluster</option>
+                    <option v-for="cl in clusters" :key="cl.id" :value="cl.id">{{ cl.name }}</option>
+                  </select>
+                </label>
+                <div class="flex flex-wrap items-center justify-end gap-3">
+                  <SaveStatus :state="status.payments" />
+                  <button
+                    v-if="agentCluster"
+                    type="button"
+                    class="inline-flex h-10 items-center rounded-xl bg-error px-4 text-sm font-semibold text-pure-white disabled:opacity-40"
+                    :disabled="busy === 'payments'"
+                    @click="removeCluster"
+                  >
+                    Remove access
+                  </button>
+                  <button
+                    type="button"
+                    :class="primaryBtn"
+                    :disabled="!editClusterId || editClusterId === agentCluster?.id || busy === 'payments'"
+                    @click="saveCluster"
+                  >
+                    Give access
+                  </button>
+                </div>
+              </template>
+              <SaveStatus v-else :state="status.payments" />
+            </section>
+
             <!-- Danger zone -->
             <section v-else-if="activeTab === 'danger'" class="flex flex-col gap-4">
               <div>
@@ -335,6 +379,7 @@
 
 <script setup lang="ts">
 import type { PropType } from "vue";
+import { useDisbursements, type Cluster } from "~/composables/useDisbursements";
 
 export type AdminAgentDetail = {
   id: string;
@@ -366,7 +411,7 @@ export type AdminAgentDetail = {
   }[];
 };
 
-export type AgentModalTab = "turf" | "claims" | "messaging" | "units" | "danger";
+export type AgentModalTab = "turf" | "claims" | "messaging" | "units" | "payments" | "danger";
 
 type SaveState = { kind: "ok" | "error"; text: string } | null;
 
@@ -427,7 +472,7 @@ const titleId = `agent-modal-${Math.random().toString(36).slice(2, 8)}`;
 const dialogEl = ref<HTMLElement | null>(null);
 const activeTab = ref<AgentModalTab>("turf");
 const busy = ref<"" | AgentModalTab | "data" | "airtime">("");
-const status = reactive<Record<string, SaveState>>({ turf: null, data: null, airtime: null, messaging: null, danger: null });
+const status = reactive<Record<string, SaveState>>({ turf: null, data: null, airtime: null, messaging: null, payments: null, danger: null });
 const copied = ref("");
 const deleteConfirm = ref("");
 
@@ -441,6 +486,13 @@ const editAirtimeLimit = ref(1);
 const editCanMessage = ref(false);
 const editCanInvites = ref(false);
 const editCanMaterials = ref(false);
+const { canAccessTab } = useAdminAuth();
+const { loadClusters, loadAgentCluster, assignAgentCluster, removeAgentCluster } = useDisbursements();
+const clusters = ref<Cluster[]>([]);
+const agentCluster = ref<Cluster | null>(null);
+const editClusterId = ref("");
+const clusterLoading = ref(false);
+const clusterLoaded = ref(false);
 const lgas = ref<string[]>([]);
 const wards = ref<string[]>([]);
 
@@ -464,6 +516,9 @@ const tabs = computed(() => [
   { id: "claims" as const, label: "Claims", icon: "sim_card", badge: undefined },
   { id: "messaging" as const, label: "Messaging", icon: "forum", badge: undefined },
   { id: "units" as const, label: "Polling units", icon: "how_to_vote", badge: props.agent?.polling_units.length ?? 0 },
+  ...(canAccessTab("disbursements")
+    ? [{ id: "payments" as const, label: "Payments", icon: "payments", badge: undefined }]
+    : []),
   { id: "danger" as const, label: "Danger zone", icon: "warning", badge: undefined },
 ]);
 
@@ -678,6 +733,54 @@ function saveInboxPermissions() {
     }),
   );
 }
+
+async function refreshCluster() {
+  const id = props.agent?.id;
+  if (!id) return;
+  clusterLoading.value = true;
+  try {
+    const [list, current] = await Promise.all([loadClusters(), loadAgentCluster(id)]);
+    if (props.agent?.id !== id) return;
+    clusters.value = list;
+    agentCluster.value = current || null;
+    editClusterId.value = current?.id ?? "";
+    clusterLoaded.value = true;
+  } catch (e: unknown) {
+    if (props.agent?.id === id) status.payments = { kind: "error", text: errorText(e, "Could not load payment access.") };
+  } finally {
+    if (props.agent?.id === id) clusterLoading.value = false;
+  }
+}
+
+async function saveCluster() {
+  if (!props.agent || !editClusterId.value) return;
+  const id = props.agent.id;
+  await run("payments", "Payment access given", "Could not give payment access.", () =>
+    assignAgentCluster(id, editClusterId.value),
+  );
+  if (status.payments?.kind === "ok") await refreshCluster();
+}
+
+async function removeCluster() {
+  if (!props.agent) return;
+  const id = props.agent.id;
+  await run("payments", "Payment access removed", "Could not remove payment access.", () => removeAgentCluster(id));
+  if (status.payments?.kind === "ok") await refreshCluster();
+}
+
+// Load when the Payments tab is opened, and never show another agent's cluster.
+watch(
+  () => [props.open, props.agent?.id, activeTab.value] as const,
+  ([isOpen, id, tab], prev) => {
+    if (!prev || prev[0] !== isOpen || prev[1] !== id) {
+      clusterLoaded.value = false;
+      clusterLoading.value = false;
+      agentCluster.value = null;
+      editClusterId.value = "";
+    }
+    if (isOpen && id && tab === "payments" && !clusterLoaded.value) refreshCluster();
+  },
+);
 
 async function onDelete() {
   if (!props.agent || deleteConfirm.value.trim() !== props.agent.name.trim()) return;
