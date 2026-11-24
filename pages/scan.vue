@@ -29,6 +29,9 @@
         >
           {{ loading ? "Processing..." : "Upload and Extract" }}
         </button>
+        <NuxtLink v-if="ready && !token" to="/admin/login" class="self-center text-sm text-emerald-600 underline">
+          Admin login required
+        </NuxtLink>
       </div>
 
       <p v-if="errorMsg" class="mt-3 text-sm text-red-500 dark:text-red-400">{{ errorMsg }}</p>
@@ -81,8 +84,7 @@ type Registration = {
 
 type Trend = { date: string; total: number };
 
-const config = useRuntimeConfig();
-const apiBase = config.public.apiBase;
+const { token, ready, authHeaders, apiBase } = useAdminAuth();
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
@@ -130,6 +132,10 @@ function onSelectFile(event: Event) {
 
 async function upload() {
   if (!selectedFile.value) return;
+  if (!token.value) {
+    errorMsg.value = "Log in as an admin to scan forms.";
+    return;
+  }
   loading.value = true;
   errorMsg.value = "";
 
@@ -139,6 +145,7 @@ async function upload() {
   try {
     const res = await $fetch<Registration>(`${apiBase}/upload-form`, {
       method: "POST",
+      headers: authHeaders(),
       body: formData,
     });
     result.value = res;
