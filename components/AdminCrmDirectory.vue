@@ -387,7 +387,7 @@ function exportRows(list: AdminCrmRow[], filename: string) {
     emit("error", "Nothing to export for the current selection.");
     return;
   }
-  const header = ["Name", "ID", "Type", "VIN", "Email", "Phone", "State", "LGA", "Ward", "Polling Unit", "Support", "Score", "Tags", "Activity"];
+  const header = ["Name", "ID", "Type", "VIN", "Email", "Phone", "State", "LGA", "Ward", "Polling Unit", "Address", "Support", "Score", "Tags", "Activity"];
   const lines = [
     header.join(","),
     ...list.map((row) =>
@@ -402,6 +402,7 @@ function exportRows(list: AdminCrmRow[], filename: string) {
         row.lga || "",
         row.ward || "",
         row.polling_unit || "",
+        row.address || "",
         row.support_label,
         row.support_score,
         row.tags.join("|"),
@@ -554,18 +555,13 @@ async function onImportFile(event: Event) {
 }
 
 function downloadSampleTemplate() {
-  const headers = ["LGA", "Ward", "Polling Unit", "Voter Name", "Phone Number", "Gender", "DOB-Y", "VIN"];
-  const sample = [
-    "Abeokuta South",
-    "Ake I",
-    "ST. PETERS SCHOOL AKE",
-    "DOE, JANE ADEOLA",
-    "08012345678",
-    "F",
-    "1990",
-    "90F5AF5792502445847",
+  const headers = ["LGA", "Ward", "Polling Unit", "Voter Name", "Phone Number", "Gender", "DOB-Y", "VIN", "Address"];
+  // The second row has no phone number: phone is optional.
+  const samples = [
+    ["Abeokuta South", "Ake I", "ST. PETERS SCHOOL AKE", "DOE, JANE ADEOLA", "08012345678", "F", "1990", "90F5AF5792502445847", "12, Unity Street, Ake, Abeokuta"],
+    ["Abeokuta South", "Ake I", "ST. PETERS SCHOOL AKE", "DOE, JOHN OLU", "", "M", "1985", "", "14, Unity Street, Ake, Abeokuta"],
   ];
-  const csv = `${headers.join(",")}\n${sample.map((c) => `"${c}"`).join(",")}\n`;
+  const csv = `${headers.join(",")}\n${samples.map((row) => row.map((c) => `"${c}"`).join(",")).join("\n")}\n`;
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -573,7 +569,7 @@ function downloadSampleTemplate() {
   a.download = "bulk-voters-sample.csv";
   a.click();
   URL.revokeObjectURL(url);
-  emit("message", "Downloaded CSV sample (same columns as the Excel template).");
+  emit("message", "Downloaded CSV sample. Only Voter Name and LGA are required; delete the two example rows before importing.");
 }
 
 const deletableSelected = computed(() => selectedRows.value.filter((row) => !isAgentRow(row)));
@@ -794,7 +790,7 @@ function showingLabel() {
     <p v-if="selectedOrg" class="text-xs text-outline">
       Importing into organization:
       <span class="font-semibold text-on-surface">{{ selectedOrg.name }}</span>
-      · Columns: LGA, Ward, Polling Unit, Voter Name, Phone Number, Gender, DOB-Y, VIN
+      · Columns: LGA, Ward, Polling Unit, Voter Name, Phone Number (optional), Gender, DOB-Y, VIN, Address
     </p>
 
       <div
@@ -910,7 +906,7 @@ function showingLabel() {
           <input
             v-model="query"
             class="h-12 w-full rounded-xl bg-off-white pl-11 pr-10 font-body-md text-sm text-on-surface transition-colors placeholder:text-outline focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-secondary/30"
-            placeholder="Search voters by name, VIN, polling unit, ward, LGA or voter ID…"
+            placeholder="Search voters by name, VIN, polling unit, ward, LGA, address or voter ID…"
             type="search"
             aria-label="Search voters"
           />
